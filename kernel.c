@@ -40,6 +40,11 @@ extern void calc_handle_key(char key);
 extern void calc_handle_click(gui_window_t* win, int mx, int my);
 extern void settings_handle_click(gui_window_t* win, int mx, int my);
 
+/* Game functions */
+extern void pong_run(void);
+extern void snake_run(void);
+extern void game_2048_run(void);
+
 /* Settings getters */
 extern int get_settings_theme(void);
 extern int get_settings_mouse_speed(void);
@@ -485,19 +490,15 @@ static int show_games_menu(void) {
 static void launch_game(int game_id) {
     switch (game_id) {
         case 0:  /* Pong */
-            /* Initialize pong game */
-            /* TODO: Implement pong launch */
+            pong_run();
             break;
         case 1:  /* 2048 */
-            /* TODO: Implement 2048 */
+            game_2048_run();
             break;
         case 2:  /* Snake */
-            /* TODO: Implement snake */
+            snake_run();
             break;
     }
-    
-    /* For now, just return to desktop */
-    for (volatile int i = 0; i < 2000000; i++);
 }
 
 /* Kernel main entry point */

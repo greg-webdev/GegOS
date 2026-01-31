@@ -110,22 +110,13 @@ void pong_draw(void) {
     vga_fillrect(ball.x, ball.y, BALL_SIZE, BALL_SIZE, COLOR_WHITE);
     
     /* Draw scores */
-    char score_str[20];
     int score_y = PONG_HEIGHT - 15;
     
-    /* Simple number printing */
-    int left_tens = left_score / 10;
-    int left_ones = left_score % 10;
-    int right_tens = right_score / 10;
-    int right_ones = right_score % 10;
-    
-    vga_putpixel(PONG_WIDTH / 4, score_y, COLOR_WHITE);
-    vga_putpixel(PONG_WIDTH / 4 + 8, score_y, COLOR_WHITE);
-    vga_putpixel(PONG_WIDTH * 3 / 4, score_y, COLOR_WHITE);
-    vga_putpixel(PONG_WIDTH * 3 / 4 + 8, score_y, COLOR_WHITE);
+    (void)score_y;  /* Suppress unused warning */
 }
 
 void pong_handle_mouse(int x, int y) {
+    (void)x;  /* Suppress unused parameter warning */
     /* Control left paddle with mouse */
     if (y > 0 && y < PONG_HEIGHT - PADDLE_HEIGHT) {
         left_paddle.y = y;
