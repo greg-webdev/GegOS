@@ -8,19 +8,19 @@
 #include "mouse.h"
 #include "keyboard.h"
 
-/* GUI Colors (Lisa-inspired grayscale palette) */
-#define GUI_COLOR_DESKTOP     COLOR_LIGHT_GRAY
-#define GUI_COLOR_WINDOW_BG   COLOR_WHITE
+/* GUI Colors (Windows 95/XP classic theme) */
+#define GUI_COLOR_DESKTOP     COLOR_CYAN          /* Teal desktop */
+#define GUI_COLOR_WINDOW_BG   COLOR_LIGHT_GRAY    /* Gray window background */
 #define GUI_COLOR_WINDOW_FG   COLOR_BLACK
-#define GUI_COLOR_TITLEBAR    COLOR_BLACK
+#define GUI_COLOR_TITLEBAR    COLOR_BLUE          /* Blue active titlebar */
 #define GUI_COLOR_TITLE_TEXT  COLOR_WHITE
 #define GUI_COLOR_BORDER      COLOR_BLACK
-#define GUI_COLOR_BUTTON_BG   COLOR_WHITE
+#define GUI_COLOR_BUTTON_BG   COLOR_LIGHT_GRAY    /* Gray buttons */
 #define GUI_COLOR_BUTTON_FG   COLOR_BLACK
-#define GUI_COLOR_BUTTON_HOVER COLOR_LIGHT_GRAY
+#define GUI_COLOR_BUTTON_HOVER COLOR_LIGHT_CYAN
 #define GUI_COLOR_BUTTON_PRESS COLOR_DARK_GRAY
-#define GUI_COLOR_MENUBAR     COLOR_WHITE
-#define GUI_COLOR_CURSOR      COLOR_BLACK
+#define GUI_COLOR_TASKBAR     COLOR_LIGHT_GRAY    /* Gray taskbar */
+#define GUI_COLOR_CURSOR      COLOR_WHITE
 
 /* Window storage */
 static gui_window_t windows[MAX_WINDOWS];
