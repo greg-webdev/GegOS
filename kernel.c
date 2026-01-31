@@ -241,26 +241,19 @@ static void full_redraw(void) {
     int tile_width = SCREEN_WIDTH / TILE_COLS;
     int tile_height = (SCREEN_HEIGHT - 13) / TILE_ROWS;
     
-    /* Create tile drawing order array (randomized pattern) */
+    /* Create tile drawing order array (layer by layer - top to bottom) */
     static int tile_order[TILE_COLS * TILE_ROWS];
     static int order_initialized = 0;
     
     if (!order_initialized) {
-        /* Initialize with sequential order then shuffle */
+        /* Sequential order - layer by layer (row by row) */
         for (int i = 0; i < TOTAL_TILES; i++) {
             tile_order[i] = i;
-        }
-        /* Simple shuffle using XOR pattern for deterministic randomness */
-        for (int i = 0; i < TOTAL_TILES; i++) {
-            int j = (i * 71 + 13) % TOTAL_TILES;
-            int temp = tile_order[i];
-            tile_order[i] = tile_order[j];
-            tile_order[j] = temp;
         }
         order_initialized = 1;
     }
     
-    /* Draw in tiles with cool reveal effect */
+    /* Draw in tiles - all simultaneously (no delays) */
     for (int t = 0; t < TOTAL_TILES; t++) {
         int tile_idx = tile_order[t];
         int col = tile_idx % TILE_COLS;
@@ -292,11 +285,6 @@ static void full_redraw(void) {
                 int lx = ix + (48 - label_len * 8) / 2;
                 vga_putstring(lx, iy + 23, desktop_icons[i].label, COLOR_BLACK, COLOR_WHITE);
             }
-        }
-        
-        /* Small delay for visual effect (only every few tiles) */
-        if (t % 8 == 0) {
-            for (volatile int d = 0; d < 5000; d++);
         }
     }
     
