@@ -405,6 +405,101 @@ static void redraw_window(int win_id) {
     else if (win_id == get_about_win()) about_draw_content(win);
 }
 
+/* Display games menu and return selected game index, -1 for desktop */
+static int show_games_menu(void) {
+    /* Game list */
+    typedef struct {
+        const char* name;
+        const char* desc;
+    } game_t;
+    
+    game_t games[] = {
+        {"Pong", "Classic Pong game"},
+        {"2048", "Tile merging puzzle"},
+        {"Snake", "Classic Snake game"},
+        {NULL, NULL}
+    };
+    
+    int selected = 0;
+    int num_games = 0;
+    while (games[num_games].name) num_games++;
+    
+    int menu_running = 1;
+    while (menu_running) {
+        /* Clear screen with dark background */
+        vga_fillrect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, COLOR_DARK_GRAY);
+        
+        /* Draw title */
+        vga_putstring(100, 20, "GegOS GAMES", COLOR_YELLOW, COLOR_DARK_GRAY);
+        vga_putstring(50, 50, "Select a game (arrow keys, Enter to play, Space for desktop):", 
+                     COLOR_WHITE, COLOR_DARK_GRAY);
+        
+        /* Draw game list */
+        int list_y = 90;
+        for (int i = 0; i < num_games; i++) {
+            if (i == selected) {
+                /* Selected item - highlight */
+                vga_fillrect(40, list_y + i * 40, 240, 35, COLOR_BLUE);
+                vga_putstring(50, list_y + i * 40 + 5, games[i].name, COLOR_YELLOW, COLOR_BLUE);
+                vga_putstring(50, list_y + i * 40 + 18, games[i].desc, COLOR_LIGHT_CYAN, COLOR_BLUE);
+            } else {
+                /* Unselected item */
+                vga_rect(40, list_y + i * 40, 240, 35, COLOR_LIGHT_GRAY);
+                vga_putstring(50, list_y + i * 40 + 5, games[i].name, COLOR_WHITE, COLOR_DARK_GRAY);
+                vga_putstring(50, list_y + i * 40 + 18, games[i].desc, COLOR_LIGHT_GRAY, COLOR_DARK_GRAY);
+            }
+        }
+        
+        /* Draw instructions */
+        vga_putstring(50, SCREEN_HEIGHT - 40, "Up/Down: Move | Enter: Select | Space: Skip to Desktop", 
+                     COLOR_LIGHT_GRAY, COLOR_DARK_GRAY);
+        
+        /* Wait for keyboard input */
+        while (!keyboard_haskey()) {
+            mouse_update();
+            /* Allow skipping with mouse click */
+            if (mouse_button_down(MOUSE_LEFT)) {
+                return -1;  /* Go to desktop */
+            }
+        }
+        
+        char key = keyboard_getchar();
+        
+        if (key == 0x48) {  /* Up arrow */
+            selected--;
+            if (selected < 0) selected = num_games - 1;
+        } else if (key == 0x50) {  /* Down arrow */
+            selected++;
+            if (selected >= num_games) selected = 0;
+        } else if (key == '\n') {  /* Enter */
+            return selected;
+        } else if (key == ' ') {  /* Space */
+            return -1;  /* Go to desktop */
+        }
+    }
+    
+    return -1;  /* Default to desktop */
+}
+
+/* Launch selected game */
+static void launch_game(int game_id) {
+    switch (game_id) {
+        case 0:  /* Pong */
+            /* Initialize pong game */
+            /* TODO: Implement pong launch */
+            break;
+        case 1:  /* 2048 */
+            /* TODO: Implement 2048 */
+            break;
+        case 2:  /* Snake */
+            /* TODO: Implement snake */
+            break;
+    }
+    
+    /* For now, just return to desktop */
+    for (volatile int i = 0; i < 2000000; i++);
+}
+
 /* Kernel main entry point */
 void kernel_main(uint32_t magic, uint32_t* multiboot_info) {
     (void)magic;
@@ -442,6 +537,14 @@ void kernel_main(uint32_t magic, uint32_t* multiboot_info) {
     /* Initialize GUI and apps */
     gui_init();
     apps_init();
+    
+    /* Show games menu at startup */
+    int selected_game = show_games_menu();
+    
+    /* If a game was selected, launch it */
+    if (selected_game >= 0) {
+        launch_game(selected_game);
+    }
     
     /* Initial draw */
     needs_redraw = 1;
