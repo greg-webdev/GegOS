@@ -230,26 +230,58 @@ void gui_draw_cursor(int x, int y) {
     cursor_last_y = y;
 }
 
-/* Draw menubar */
+/* Draw Windows-style taskbar */
 void gui_draw_menubar(void) {
-    /* Menu bar background */
-    vga_fillrect(0, 0, SCREEN_WIDTH, 12, GUI_COLOR_MENUBAR);
-    vga_hline(0, 12, SCREEN_WIDTH, GUI_COLOR_BORDER);
+    int taskbar_height = 28;
+    int taskbar_y = SCREEN_HEIGHT - taskbar_height;
     
-    /* Apple/System menu icon (simple) */
-    vga_fillrect(4, 2, 8, 8, COLOR_BLACK);
+    /* Taskbar background */
+    vga_fillrect(0, taskbar_y, SCREEN_WIDTH, taskbar_height, GUI_COLOR_TASKBAR);
     
-    /* Menu items */
-    vga_putstring(16, 2, "File", COLOR_BLACK, GUI_COLOR_MENUBAR);
-    vga_putstring(48, 2, "Edit", COLOR_BLACK, GUI_COLOR_MENUBAR);
-    vga_putstring(80, 2, "View", COLOR_BLACK, GUI_COLOR_MENUBAR);
-    vga_putstring(112, 2, "Help", COLOR_BLACK, GUI_COLOR_MENUBAR);
+    /* Top border (raised) */
+    vga_hline(0, taskbar_y, SCREEN_WIDTH, COLOR_WHITE);
+    vga_hline(0, taskbar_y + 1, SCREEN_WIDTH, COLOR_WHITE);
+    
+    /* Start button (Windows style) */
+    int start_w = 60;
+    int start_h = 22;
+    int start_x = 2;
+    int start_y = taskbar_y + 3;
+    
+    /* Start button 3D raised border */
+    vga_fillrect(start_x, start_y, start_w, start_h, GUI_COLOR_BUTTON_BG);
+    vga_hline(start_x, start_y, start_w, COLOR_WHITE);
+    vga_vline(start_x, start_y, start_h, COLOR_WHITE);
+    vga_hline(start_x, start_y + start_h - 1, start_w, COLOR_BLACK);
+    vga_vline(start_x + start_w - 1, start_y, start_h, COLOR_BLACK);
+    vga_hline(start_x + 1, start_y + start_h - 2, start_w - 2, COLOR_DARK_GRAY);
+    vga_vline(start_x + start_w - 2, start_y + 1, start_h - 2, COLOR_DARK_GRAY);
+    
+    /* Windows logo (simplified) */
+    vga_fillrect(start_x + 5, start_y + 5, 4, 5, COLOR_RED);
+    vga_fillrect(start_x + 5, start_y + 11, 4, 5, COLOR_RED);
+    vga_fillrect(start_x + 10, start_y + 5, 4, 5, COLOR_RED);
+    vga_fillrect(start_x + 10, start_y + 11, 4, 5, COLOR_RED);
+    
+    /* Start text */
+    vga_putstring(start_x + 18, start_y + 7, "Start", COLOR_BLACK, GUI_COLOR_BUTTON_BG);
+    
+    /* Clock area (sunken) */
+    int clock_x = SCREEN_WIDTH - 60;
+    vga_fillrect(clock_x, start_y, 56, start_h, GUI_COLOR_TASKBAR);
+    vga_hline(clock_x, start_y, 56, COLOR_DARK_GRAY);
+    vga_vline(clock_x, start_y, start_h, COLOR_DARK_GRAY);
+    vga_hline(clock_x + 1, start_y + 1, 54, COLOR_BLACK);
+    vga_vline(clock_x + 1, start_y + 1, start_h - 2, COLOR_BLACK);
+    vga_hline(clock_x, start_y + start_h - 1, 56, COLOR_WHITE);
+    vga_vline(clock_x + 55, start_y, start_h, COLOR_WHITE);
+    vga_putstring(clock_x + 8, start_y + 7, "12:00 PM", COLOR_BLACK, GUI_COLOR_TASKBAR);
 }
 
 /* Draw desktop */
 void gui_draw_desktop(void) {
-    /* Simple solid desktop - much faster than pattern */
-    vga_fillrect(0, 13, SCREEN_WIDTH, SCREEN_HEIGHT - 13, COLOR_CYAN);
+    /* Windows teal/cyan desktop */
+    vga_fillrect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT - 28, GUI_COLOR_DESKTOP);
 }
 
 /* Draw window */
@@ -261,39 +293,69 @@ void gui_draw_window(gui_window_t* win) {
     int w = win->width;
     int h = win->height;
     
-    /* Window shadow */
-    vga_fillrect(x + 2, y + 2, w, h, COLOR_DARK_GRAY);
-    
-    /* Window background */
+    /* Outer 3D border (raised) */
     vga_fillrect(x, y, w, h, GUI_COLOR_WINDOW_BG);
     
-    /* Window border */
-    vga_rect(x, y, w, h, GUI_COLOR_BORDER);
-    vga_rect(x + 1, y + 1, w - 2, h - 2, GUI_COLOR_BORDER);
+    /* Light edges (top-left) */
+    vga_hline(x, y, w, COLOR_WHITE);
+    vga_vline(x, y, h, COLOR_WHITE);
+    vga_hline(x + 1, y + 1, w - 2, COLOR_WHITE);
+    vga_vline(x + 1, y + 1, h - 2, COLOR_WHITE);
+    
+    /* Dark edges (bottom-right) */
+    vga_hline(x, y + h - 1, w, COLOR_BLACK);
+    vga_vline(x + w - 1, y, h, COLOR_BLACK);
+    vga_hline(x + 1, y + h - 2, w - 2, COLOR_DARK_GRAY);
+    vga_vline(x + w - 2, y + 1, h - 2, COLOR_DARK_GRAY);
     
     /* Title bar */
+    uint8_t titlebar_color = win->active ? GUI_COLOR_TITLEBAR : COLOR_DARK_GRAY;
+    vga_fillrect(x + 3, y + 3, w - 6, 18, titlebar_color);
+    
+    /* Gradient effect (lighter at top) */
     if (win->active) {
-        /* Active window - filled title bar */
-        vga_fillrect(x + 2, y + 2, w - 4, 12, GUI_COLOR_TITLEBAR);
-        vga_putstring(x + 6, y + 4, win->title, GUI_COLOR_TITLE_TEXT, GUI_COLOR_TITLEBAR);
-    } else {
-        /* Inactive window - striped title bar */
-        for (int ty = y + 2; ty < y + 14; ty += 2) {
-            vga_hline(x + 2, ty, w - 4, GUI_COLOR_BORDER);
-        }
-        vga_fillrect(x + 6, y + 3, 8 * 10, 10, GUI_COLOR_WINDOW_BG);
-        vga_putstring(x + 6, y + 4, win->title, GUI_COLOR_WINDOW_FG, GUI_COLOR_WINDOW_BG);
+        vga_hline(x + 3, y + 3, w - 6, COLOR_LIGHT_BLUE);
+        vga_hline(x + 3, y + 4, w - 6, COLOR_LIGHT_BLUE);
     }
     
-    /* Title bar separator */
-    vga_hline(x + 2, y + 14, w - 4, GUI_COLOR_BORDER);
+    /* Title text */
+    if (win->title) {
+        vga_putstring(x + 8, y + 7, win->title, GUI_COLOR_TITLE_TEXT, titlebar_color);
+    }
     
-    /* Close box with X */
-    vga_rect(x + w - 14, y + 3, 10, 10, GUI_COLOR_BORDER);
-    vga_fillrect(x + w - 13, y + 4, 8, 8, GUI_COLOR_WINDOW_BG);
-    /* Draw X */
-    vga_line(x + w - 12, y + 5, x + w - 7, y + 10, GUI_COLOR_BORDER);
-    vga_line(x + w - 12, y + 10, x + w - 7, y + 5, GUI_COLOR_BORDER);
+    /* Window control buttons */
+    int btn_size = 14;
+    int btn_y = win->y + 5;
+    
+    /* Close button (X) */
+    int close_x = win->x + win->width - btn_size - 6;
+    vga_fillrect(close_x, btn_y, btn_size, btn_size, COLOR_LIGHT_GRAY);
+    vga_hline(close_x, btn_y, btn_size, COLOR_WHITE);
+    vga_vline(close_x, btn_y, btn_size, COLOR_WHITE);
+    vga_hline(close_x, btn_y + btn_size - 1, btn_size, COLOR_BLACK);
+    vga_vline(close_x + btn_size - 1, btn_y, btn_size, COLOR_BLACK);
+    vga_line(close_x + 3, btn_y + 3, close_x + 10, btn_y + 10, COLOR_BLACK);
+    vga_line(close_x + 10, btn_y + 3, close_x + 3, btn_y + 10, COLOR_BLACK);
+    
+    /* Maximize button */
+    int max_x = close_x - btn_size - 2;
+    vga_fillrect(max_x, btn_y, btn_size, btn_size, COLOR_LIGHT_GRAY);
+    vga_hline(max_x, btn_y, btn_size, COLOR_WHITE);
+    vga_vline(max_x, btn_y, btn_size, COLOR_WHITE);
+    vga_hline(max_x, btn_y + btn_size - 1, btn_size, COLOR_BLACK);
+    vga_vline(max_x + btn_size - 1, btn_y, btn_size, COLOR_BLACK);
+    vga_rect(max_x + 3, btn_y + 3, 7, 7, COLOR_BLACK);
+    vga_hline(max_x + 3, btn_y + 3, 7, COLOR_BLACK);
+    
+    /* Minimize button */
+    int min_x = max_x - btn_size - 2;
+    vga_fillrect(min_x, btn_y, btn_size, btn_size, COLOR_LIGHT_GRAY);
+    vga_hline(min_x, btn_y, btn_size, COLOR_WHITE);
+    vga_vline(min_x, btn_y, btn_size, COLOR_WHITE);
+    vga_hline(min_x, btn_y + btn_size - 1, btn_size, COLOR_BLACK);
+    vga_vline(min_x + btn_size - 1, btn_y, btn_size, COLOR_BLACK);
+    vga_hline(min_x + 3, btn_y + 10, 7, COLOR_BLACK);
+    vga_hline(min_x + 3, btn_y + 11, 7, COLOR_BLACK);
 }
 
 /* Draw button */

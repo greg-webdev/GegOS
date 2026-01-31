@@ -418,11 +418,24 @@ void notepad_draw_content(gui_window_t* win) {
     
     /* Full redraw only if cursor moved backwards or content cleared */
     if (last_notepad_cursor > notepad_cursor || last_notepad_cursor == -1) {
-        /* Clear content area */
-        vga_fillrect(win->x + 3, win->y + 16, win->width - 6, win->height - 19, COLOR_WHITE);
+        /* Gray frame */
+        vga_fillrect(win->x + 3, win->y + 22, win->width - 6, win->height - 25, COLOR_LIGHT_GRAY);
         
-        int x = win->x + 5;
-        int y = win->y + 20;
+        /* White text area (sunken) */
+        int text_x = win->x + 6;
+        int text_y = win->y + 25;
+        int text_w = win->width - 12;
+        int text_h = win->height - 31;
+        
+        vga_fillrect(text_x, text_y, text_w, text_h, COLOR_WHITE);
+        /* Sunken border */
+        vga_hline(text_x, text_y, text_w, COLOR_DARK_GRAY);
+        vga_vline(text_x, text_y, text_h, COLOR_DARK_GRAY);
+        vga_hline(text_x, text_y + text_h - 1, text_w, COLOR_WHITE);
+        vga_vline(text_x + text_w - 1, text_y, text_h, COLOR_WHITE);
+        
+        int x = text_x + 3;
+        int y = text_y + 3;
         int start_x = x;
         
         for (int i = 0; i < notepad_cursor && notepad_buffer[i]; i++) {

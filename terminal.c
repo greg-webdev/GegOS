@@ -247,13 +247,26 @@ void terminal_draw(int x, int y, int width, int height) {
     
     /* Only clear/redraw if output changed */
     if (last_output_count != output_count) {
-        /* Background */
-        vga_fillrect(x, y, width, height, COLOR_BLACK);
+        /* Gray background */
+        vga_fillrect(x, y, width, height, COLOR_LIGHT_GRAY);
+        
+        /* Black terminal area (sunken) */
+        int term_x = x + 3;
+        int term_y = y + 3;
+        int term_w = width - 6;
+        int term_h = height - 6;
+        
+        vga_fillrect(term_x, term_y, term_w, term_h, COLOR_BLACK);
+        /* Sunken border */
+        vga_hline(term_x, term_y, term_w, COLOR_DARK_GRAY);
+        vga_vline(term_x, term_y, term_h, COLOR_DARK_GRAY);
+        vga_hline(term_x, term_y + term_h - 1, term_w, COLOR_WHITE);
+        vga_vline(term_x + term_w - 1, term_y, term_h, COLOR_WHITE);
         
         /* Draw output lines */
         for (int i = start_line; i < output_count; i++) {
-            int line_y = start_y + (i - start_line) * line_height;
-            vga_putstring(x + 5, line_y, output_lines[i], COLOR_WHITE, COLOR_BLACK);
+            int line_y = term_y + 5 + (i - start_line) * line_height;
+            vga_putstring(term_x + 5, line_y, output_lines[i], COLOR_WHITE, COLOR_BLACK);
         }
         last_output_count = output_count;
     }
