@@ -221,7 +221,7 @@ void gui_erase_cursor(void) {
     cursor_drawn = 0;
 }
 
-/* Draw mouse cursor with background saving */
+/* Draw mouse cursor using XOR */
 void gui_draw_cursor(int x, int y) {
     /* Erase old cursor first */
     gui_erase_cursor();
@@ -229,52 +229,14 @@ void gui_draw_cursor(int x, int y) {
     /* Clamp position */
     if (x < 0) x = 0;
     if (y < 0) y = 0;
-    if (x >= SCREEN_WIDTH - 1) x = SCREEN_WIDTH - 2;
-    if (y >= SCREEN_HEIGHT - 1) y = SCREEN_HEIGHT - 2;
+    if (x >= SCREEN_WIDTH - 8) x = SCREEN_WIDTH - 9;
+    if (y >= SCREEN_HEIGHT - 12) y = SCREEN_HEIGHT - 13;
     
-    /* Save background under new cursor position */
-    for (int j = 0; j < CURSOR_HEIGHT; j++) {
-        for (int i = 0; i < CURSOR_WIDTH; i++) {
-            int px = x + i;
-            int py = y + j;
-            if (px >= 0 && px < SCREEN_WIDTH && py >= 0 && py < SCREEN_HEIGHT) {
-                cursor_backup[j * CURSOR_WIDTH + i] = vga_getpixel(px, py);
-            } else {
-                cursor_backup[j * CURSOR_WIDTH + i] = 0;
-            }
-        }
-    }
-    cursor_backup_valid = 1;
+    /* Draw new XOR cursor */
+    draw_xor_cursor(x, y);
+    cursor_drawn = 1;
     cursor_last_x = x;
     cursor_last_y = y;
-    
-    /* Sample center for smart color */
-    uint8_t bg = vga_getpixel(x + 3, y + 3);
-    uint8_t cursor_color = (bg > 7) ? COLOR_BLACK : COLOR_WHITE;
-    
-    /* Draw arrow cursor shape */
-    /* Row 0 */
-    vga_putpixel(x, y, cursor_color);
-    /* Row 1 */
-    vga_putpixel(x, y+1, cursor_color); vga_putpixel(x+1, y+1, cursor_color);
-    /* Row 2 */
-    vga_putpixel(x, y+2, cursor_color); vga_putpixel(x+1, y+2, cursor_color); vga_putpixel(x+2, y+2, cursor_color);
-    /* Row 3 */
-    vga_putpixel(x, y+3, cursor_color); vga_putpixel(x+1, y+3, cursor_color); vga_putpixel(x+2, y+3, cursor_color); vga_putpixel(x+3, y+3, cursor_color);
-    /* Row 4 */
-    vga_putpixel(x, y+4, cursor_color); vga_putpixel(x+1, y+4, cursor_color); vga_putpixel(x+2, y+4, cursor_color); vga_putpixel(x+3, y+4, cursor_color); vga_putpixel(x+4, y+4, cursor_color);
-    /* Row 5 */
-    vga_putpixel(x, y+5, cursor_color); vga_putpixel(x+1, y+5, cursor_color); vga_putpixel(x+2, y+5, cursor_color); vga_putpixel(x+3, y+5, cursor_color); vga_putpixel(x+4, y+5, cursor_color); vga_putpixel(x+5, y+5, cursor_color);
-    /* Row 6 */
-    vga_putpixel(x, y+6, cursor_color); vga_putpixel(x+1, y+6, cursor_color); vga_putpixel(x+2, y+6, cursor_color); vga_putpixel(x+3, y+6, cursor_color); vga_putpixel(x+4, y+6, cursor_color); vga_putpixel(x+5, y+6, cursor_color); vga_putpixel(x+6, y+6, cursor_color);
-    /* Row 7 - narrowing */
-    vga_putpixel(x, y+7, cursor_color); vga_putpixel(x+1, y+7, cursor_color); vga_putpixel(x+2, y+7, cursor_color); vga_putpixel(x+3, y+7, cursor_color); vga_putpixel(x+4, y+7, cursor_color);
-    /* Row 8 */
-    vga_putpixel(x, y+8, cursor_color); vga_putpixel(x+1, y+8, cursor_color); vga_putpixel(x+3, y+8, cursor_color); vga_putpixel(x+4, y+8, cursor_color);
-    /* Row 9 */
-    vga_putpixel(x, y+9, cursor_color); vga_putpixel(x+4, y+9, cursor_color); vga_putpixel(x+5, y+9, cursor_color);
-    /* Row 10 */
-    vga_putpixel(x+5, y+10, cursor_color);
 }
 
 /* Draw Windows-style taskbar */

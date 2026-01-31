@@ -570,7 +570,7 @@ void kernel_main(uint32_t magic, uint32_t* multiboot_info) {
     vga_clear(COLOR_BLUE);
     vga_fillrect(220, 180, 200, 80, COLOR_WHITE);
     vga_rect(220, 180, 200, 80, COLOR_BLACK);
-    vga_putstring(260, 200, "GegOS v0.7", COLOR_BLACK, COLOR_WHITE);
+    vga_putstring(260, 200, "GegOS v1.0", COLOR_BLACK, COLOR_WHITE);
     vga_putstring(250, 230, "Starting...", COLOR_DARK_GRAY, COLOR_WHITE);
     
     /* Delay during startup */
@@ -672,11 +672,11 @@ void kernel_main(uint32_t magic, uint32_t* multiboot_info) {
         } else if (mouse_btn && is_dragging && mouse_moved) {
             /* Window is being dragged - update position */
             gui_update();
-            needs_redraw = 1;  /* Need redraw for window movement */
+            /* Skip full redraw during drag - too slow */
         } else if (mouse_released) {
             if (is_dragging) {
                 is_dragging = 0;
-                needs_redraw = 1;  /* Final redraw after drag */
+                needs_redraw = 1;  /* Only redraw after drag ends */
             }
         }
         
