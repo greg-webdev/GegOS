@@ -36,8 +36,15 @@ static uint8_t cursor_backup[16 * 16];
 static int cursor_drawn = 0;
 static int cursor_last_x = -1, cursor_last_y = -1;
 
-/* Invalidate cursor backup - call after full screen redraw */
+/* Forward declaration */
+static void cursor_restore_bg(int x, int y);
+
+/* Invalidate cursor backup - restores cursor background first */
 void gui_cursor_invalidate(void) {
+    /* Restore old cursor position before invalidating */
+    if (cursor_drawn && cursor_last_x >= 0 && cursor_last_y >= 0) {
+        cursor_restore_bg(cursor_last_x, cursor_last_y);
+    }
     cursor_drawn = 0;
     cursor_last_x = -1;
     cursor_last_y = -1;

@@ -317,7 +317,7 @@ void kernel_main(uint32_t magic, uint32_t* multiboot_info) {
     vga_clear(COLOR_BLUE);
     vga_fillrect(220, 180, 200, 80, COLOR_WHITE);
     vga_rect(220, 180, 200, 80, COLOR_BLACK);
-    vga_putstring(260, 200, "GegOS v0.4", COLOR_BLACK, COLOR_WHITE);
+    vga_putstring(260, 200, "GegOS v0.7", COLOR_BLACK, COLOR_WHITE);
     vga_putstring(250, 230, "Starting...", COLOR_DARK_GRAY, COLOR_WHITE);
     
     /* Delay during startup */

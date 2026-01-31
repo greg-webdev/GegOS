@@ -251,7 +251,7 @@ void terminal_scroll_down(void) {
 
 void terminal_draw(int x, int y, int width, int height) {
     int line_height = 12;
-    int start_y = y + 5;
+    (void)y;  /* Suppress unused warning */
     int max_lines = (height - 30) / line_height;
     
     /* Calculate visible range with scroll offset */
@@ -274,14 +274,14 @@ void terminal_draw(int x, int y, int width, int height) {
         int term_x = x + 3;
         int term_y = y + 3;
         int term_w = width - 6;
-        int term_h = height - 6;
-        
-        vga_fillrect(term_x, term_y, term_w, term_h, COLOR_BLACK);
+        int term_h_inner = height - 6;
+
+        vga_fillrect(term_x, term_y, term_w, term_h_inner, COLOR_BLACK);
         /* Sunken border */
         vga_hline(term_x, term_y, term_w, COLOR_DARK_GRAY);
-        vga_vline(term_x, term_y, term_h, COLOR_DARK_GRAY);
-        vga_hline(term_x, term_y + term_h - 1, term_w, COLOR_WHITE);
-        vga_vline(term_x + term_w - 1, term_y, term_h, COLOR_WHITE);
+        vga_vline(term_x, term_y, term_h_inner, COLOR_DARK_GRAY);
+        vga_hline(term_x, term_y + term_h_inner - 1, term_w, COLOR_WHITE);
+        vga_vline(term_x + term_w - 1, term_y, term_h_inner, COLOR_WHITE);
         
         /* Draw output lines */
         for (int i = start_line; i < end_line && i < output_count; i++) {
@@ -295,7 +295,7 @@ void terminal_draw(int x, int y, int width, int height) {
     /* Draw prompt line only if at bottom */
     int term_x = x + 3;
     int term_y = y + 3;
-    int term_h = height - 6;
+    (void)height;  /* Used in calculations above */
     
     if (scroll_offset == 0) {
         int visible_lines = (end_line - start_line);
