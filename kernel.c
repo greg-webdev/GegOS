@@ -35,7 +35,7 @@ extern void browser_handle_key(char key);
 extern void files_handle_key(char key);
 extern void files_handle_click(gui_window_t* win, int mx, int my);
 extern void notepad_handle_key(char key);
-extern void terminal_handle_key(char key);
+extern void terminal_key_handler(char key);
 extern void calc_handle_key(char key);
 extern void calc_handle_click(gui_window_t* win, int mx, int my);
 extern void settings_handle_click(gui_window_t* win, int mx, int my);
@@ -176,7 +176,7 @@ static void handle_app_keyboard(char key) {
     
     win = gui_get_window(get_terminal_win());
     if (win && win->visible && win->active) {
-        terminal_handle_key(key);
+        terminal_key_handler(key);
         needs_redraw = 1;
         return;
     }

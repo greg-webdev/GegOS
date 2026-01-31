@@ -72,7 +72,7 @@ LDFLAGS = -T linker.ld \
 ASM_SOURCES = boot.s
 
 # C sources
-C_SOURCES = kernel.c vga.c keyboard.c mouse.c gui.c apps.c
+C_SOURCES = kernel.c vga.c keyboard.c mouse.c gui.c apps.c terminal.c
 
 # Object files
 ASM_OBJECTS = $(patsubst %.s,$(BUILD_DIR)/%.o,$(ASM_SOURCES))

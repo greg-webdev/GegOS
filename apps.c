@@ -9,6 +9,7 @@
 #include "mouse.h"
 #include "gui.h"
 #include "io.h"
+#include "terminal.h"
 
 /* String comparison */
 static int str_equals(const char* a, const char* b) {
@@ -462,124 +463,24 @@ void notepad_handle_key(char key) {
 /* ==================== TERMINAL APP ==================== */
 
 static int terminal_win = -1;
+static int terminal_initialized = 0;
 
 void app_terminal(void) {
-    terminal_win = gui_create_window(130, 90, 420, 280, "Terminal");
-    terminal_cursor = 0;
-    terminal_out_len = 0;
-    
-    /* Initial prompt */
-    const char* prompt = "GegOS Terminal v0.1\nType 'help' for commands\n\n>";
-    for (int i = 0; prompt[i]; i++) {
-        terminal_output[terminal_out_len++] = prompt[i];
+    terminal_win = gui_create_window(50, 50, 500, 350, "Terminal - bash");
+    if (!terminal_initialized) {
+        terminal_init();
+        terminal_initialized = 1;
     }
-    
     gui_set_active_window(terminal_win);
 }
 
 void terminal_draw_content(gui_window_t* win) {
     if (!win || !win->visible) return;
-    
-    /* Clear content area */
-    vga_fillrect(win->x + 3, win->y + 16, win->width - 6, win->height - 19, COLOR_BLACK);
-    
-    int x = win->x + 5;
-    int y = win->y + 20;
-    int start_x = x;
-    
-    /* Draw output */
-    for (int i = 0; i < terminal_out_len; i++) {
-        if (terminal_output[i] == '\n') {
-            x = start_x;
-            y += 10;
-            if (y > win->y + win->height - 20) {
-                y = win->y + 20;
-                vga_fillrect(win->x + 3, win->y + 16, win->width - 6, win->height - 19, COLOR_BLACK);
-            }
-        } else {
-            if (x < win->x + win->width - 10) {
-                vga_putchar(x, y, terminal_output[i], COLOR_LIGHT_GREEN, COLOR_BLACK);
-                x += 8;
-            }
-        }
-    }
-    
-    /* Draw input buffer */
-    for (int i = 0; i < terminal_cursor; i++) {
-        if (x < win->x + win->width - 10) {
-            vga_putchar(x, y, terminal_buffer[i], COLOR_WHITE, COLOR_BLACK);
-            x += 8;
-        }
-    }
-    
-    /* Cursor */
-    vga_fillrect(x, y, 8, 8, COLOR_WHITE);
+    terminal_draw(win->x, win->y + 15, win->width, win->height - 15);
 }
 
-static void terminal_execute(void) {
-    terminal_buffer[terminal_cursor] = 0;
-    
-    /* Echo command */
-    for (int i = 0; i < terminal_cursor && terminal_out_len < 500; i++) {
-        terminal_output[terminal_out_len++] = terminal_buffer[i];
-    }
-    terminal_output[terminal_out_len++] = '\n';
-    
-    /* Process command */
-    if (str_equals(terminal_buffer, "help")) {
-        const char* help = "Commands:\n help - Show this\n dir  - List files\n run <file> - Run file\n cls  - Clear\n ver  - Version\n";
-        for (int i = 0; help[i] && terminal_out_len < 500; i++) {
-            terminal_output[terminal_out_len++] = help[i];
-        }
-    } else if (str_equals(terminal_buffer, "dir")) {
-        for (int i = 0; virtual_files[i].name; i++) {
-            const char* n = virtual_files[i].name;
-            for (int j = 0; n[j] && terminal_out_len < 500; j++) {
-                terminal_output[terminal_out_len++] = n[j];
-            }
-            terminal_output[terminal_out_len++] = '\n';
-        }
-    } else if (str_equals(terminal_buffer, "cls")) {
-        terminal_out_len = 0;
-    } else if (str_equals(terminal_buffer, "ver")) {
-        const char* ver = "GegOS v0.3\n";
-        for (int i = 0; ver[i] && terminal_out_len < 500; i++) {
-            terminal_output[terminal_out_len++] = ver[i];
-        }
-    } else if (terminal_cursor > 4 && terminal_buffer[0] == 'r' && terminal_buffer[1] == 'u' && 
-               terminal_buffer[2] == 'n' && terminal_buffer[3] == ' ') {
-        /* Run command */
-        char* fname = terminal_buffer + 4;
-        if (!file_execute(fname)) {
-            const char* err = "File not found\n";
-            for (int i = 0; err[i] && terminal_out_len < 500; i++) {
-                terminal_output[terminal_out_len++] = err[i];
-            }
-        }
-    } else if (terminal_cursor > 0) {
-        const char* err = "Unknown command\n";
-        for (int i = 0; err[i] && terminal_out_len < 500; i++) {
-            terminal_output[terminal_out_len++] = err[i];
-        }
-    }
-    
-    /* New prompt */
-    terminal_output[terminal_out_len++] = '>';
-    terminal_cursor = 0;
-}
-
-void terminal_handle_key(char key) {
-    if (key == '\n') {
-        terminal_execute();
-    } else if (key == '\b') {
-        if (terminal_cursor > 0) {
-            terminal_cursor--;
-        }
-    } else if (key >= 32 && key < 127) {
-        if (terminal_cursor < 200) {
-            terminal_buffer[terminal_cursor++] = key;
-        }
-    }
+void terminal_key_handler(char key) {
+    terminal_handle_key(key);
 }
 
 /* ==================== CALCULATOR APP ==================== */
