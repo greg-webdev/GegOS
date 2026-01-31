@@ -250,8 +250,6 @@ int app_run(const char* name) {
 /* ==================== BROWSER APP (Potato) ==================== */
 
 static int browser_win = -1;
-static char browser_url[64] = "potato://home";
-static int browser_history_pos = 0;
 
 void app_browser(void) {
     browser_page = 0;

@@ -163,7 +163,17 @@ static void set_read_plane(uint8_t plane) {
     outb(VGA_GC_INDEX, GC_READ_MAP_SELECT);
     outb(VGA_GC_DATA, plane);
 }
+/* Set write mode (0 or 2) */
+static inline void set_write_mode(int mode) {
+    outb(VGA_GC_INDEX, GC_GRAPHICS_MODE);
+    outb(VGA_GC_DATA, mode);
+}
 
+/* Fast plane mask - all planes */
+static inline void set_all_planes(void) {
+    outb(VGA_SEQ_INDEX, SEQ_MAP_MASK);
+    outb(VGA_SEQ_DATA, 0x0F);
+}
 /* Initialize VGA Mode 12h (640x480, 16 colors) */
 void vga_init(void) {
     int i;
@@ -266,18 +276,49 @@ uint8_t vga_getpixel(int x, int y) {
     return color;
 }
 
-/* Horizontal line */
+/* Horizontal line - OPTIMIZED */
 void vga_hline(int x, int y, int width, uint8_t color) {
-    for (int i = 0; i < width; i++) {
-        vga_putpixel(x + i, y, color);
+    if (y < 0 || y >= SCREEN_HEIGHT) return;
+    
+    /* Fast path for aligned spans */
+    int x1 = x;
+    int x2 = x + width - 1;
+    
+    if (x1 < 0) x1 = 0;
+    if (x2 >= SCREEN_WIDTH) x2 = SCREEN_WIDTH - 1;
+    
+    for (int i = x1; i <= x2; i++) {
+        vga_putpixel(i, y, color);
     }
 }
 
-/* Vertical line */
+/* Vertical line - OPTIMIZED */
 void vga_vline(int x, int y, int height, uint8_t color) {
-    for (int i = 0; i < height; i++) {
-        vga_putpixel(x, y + i, color);
+    if (x < 0 || x >= SCREEN_WIDTH) return;
+    
+    int y1 = y;
+    int y2 = y + height - 1;
+    
+    if (y1 < 0) y1 = 0;
+    if (y2 >= SCREEN_HEIGHT) y2 = SCREEN_HEIGHT - 1;
+    
+    /* Pre-calculate for speed */
+    int offset_base = x / 8;
+    int bit = 7 - (x & 7);
+    uint8_t mask = 1 << bit;
+    
+    /* Set write mode 2 */
+    outb(VGA_GC_INDEX, GC_BIT_MASK);
+    outb(VGA_GC_DATA, mask);
+    
+    for (int i = y1; i <= y2; i++) {
+        int offset = (i * 80) + offset_base;
+        VGA_MEMORY[offset] = color;
     }
+    
+    /* Restore bit mask */
+    outb(VGA_GC_INDEX, GC_BIT_MASK);
+    outb(VGA_GC_DATA, 0xFF);
 }
 
 /* Line (Bresenham) */
@@ -307,13 +348,49 @@ void vga_rect(int x, int y, int width, int height, uint8_t color) {
     vga_vline(x + width - 1, y, height, color);
 }
 
-/* Filled rectangle */
+/* Filled rectangle - OPTIMIZED */
 void vga_fillrect(int x, int y, int width, int height, uint8_t color) {
+    /* Use write mode 0 for fast fills */
+    set_write_mode(0);
+    set_all_planes();
+    
+    /* Replicate color to all 8 bits */
+    uint8_t fill_byte = 0;
+    for (int i = 0; i < 8; i++) {
+        fill_byte |= (color << (i & 7));
+    }
+    
     for (int j = 0; j < height; j++) {
+        int ypos = y + j;
+        if (ypos < 0 || ypos >= SCREEN_HEIGHT) continue;
+        
         for (int i = 0; i < width; i++) {
-            vga_putpixel(x + i, y + j, color);
+            int xpos = x + i;
+            if (xpos < 0 || xpos >= SCREEN_WIDTH) continue;
+            
+            int offset = (ypos * 80) + (xpos / 8);
+            int bit = 7 - (xpos & 7);
+            uint8_t mask = 1 << bit;
+            
+            /* Read-modify-write for each plane */
+            for (int plane = 0; plane < 4; plane++) {
+                outb(VGA_SEQ_INDEX, SEQ_MAP_MASK);
+                outb(VGA_SEQ_DATA, 1 << plane);
+                
+                uint8_t old = VGA_MEMORY[offset];
+                if (color & (1 << plane)) {
+                    VGA_MEMORY[offset] = old | mask;
+                } else {
+                    VGA_MEMORY[offset] = old & ~mask;
+                }
+            }
         }
     }
+    
+    /* Restore write mode 2 */
+    set_write_mode(2);
+    outb(VGA_GC_INDEX, GC_BIT_MASK);
+    outb(VGA_GC_DATA, 0xFF);
 }
 
 /* Circle outline */

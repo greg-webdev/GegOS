@@ -312,6 +312,7 @@ void kernel_main(uint32_t magic, uint32_t* multiboot_info) {
     /* Previous mouse state */
     int last_mx = -1, last_my = -1;
     int last_mouse_btn = 0;
+    int active_win_id = -1;
     
     /* Main loop */
     while (1) {
@@ -332,6 +333,7 @@ void kernel_main(uint32_t magic, uint32_t* multiboot_info) {
         
         /* Handle mouse clicks */
         if (mouse_clicked) {
+            int old_active = active_win_id;
             gui_update();
             
             /* Check desktop icons */
@@ -342,23 +344,45 @@ void kernel_main(uint32_t magic, uint32_t* multiboot_info) {
             /* Handle app-specific clicks */
             handle_app_click(mx, my);
             
+            /* Find active window */
+            active_win_id = -1;
+            for (int i = 0; i < 16; i++) {
+                gui_window_t* win = gui_get_window(i);
+                if (win && win->active && win->visible) {
+                    active_win_id = i;
+                    break;
+                }
+            }
+            
             /* Check if we started dragging */
             for (int i = 0; i < 16; i++) {
                 gui_window_t* win = gui_get_window(i);
                 if (win && win->dragging) {
                     is_dragging = 1;
+                    needs_redraw = 1;  /* Full redraw for drag start */
                     break;
                 }
             }
             
-            needs_redraw = 1;
+            /* If just activated a window without dragging, only redraw that window */
+            if (!is_dragging && active_win_id >= 0) {
+                if (old_active != active_win_id) {
+                    needs_redraw = 1;  /* Window activation - need full redraw */
+                } else {
+                    /* Clicked inside active window - partial redraw */
+                    redraw_window(active_win_id);
+                }
+            } else if (!is_dragging) {
+                /* Clicked desktop/icon - full redraw */
+                needs_redraw = 1;
+            }
         } else if (mouse_btn && is_dragging && mouse_moved) {
-            /* Window is being dragged and mouse moved - update */
+            /* Window is being dragged - full redraw needed */
             gui_update();
             needs_redraw = 1;
         } else if (mouse_released && is_dragging) {
             is_dragging = 0;
-            needs_redraw = 1;
+            needs_redraw = 1;  /* Final redraw after drag */
         }
         
         last_mouse_btn = mouse_btn;
@@ -368,6 +392,10 @@ void kernel_main(uint32_t magic, uint32_t* multiboot_info) {
             char key = keyboard_getchar();
             if (key != 0) {
                 handle_app_keyboard(key);
+                /* Keyboard input - only redraw active window */
+                if (active_win_id >= 0) {
+                    redraw_window(active_win_id);
+                }
             }
         }
         
