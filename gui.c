@@ -180,7 +180,7 @@ void gui_draw_cursor(int x, int y) {
     if (cursor_drawn && cursor_last_x >= 0 && cursor_last_y >= 0) {
         int ox = cursor_last_x, oy = cursor_last_y;
         /* Draw with desktop background color to erase */
-        uint8_t bg = get_desktop_color();
+        uint8_t bg = GUI_COLOR_DESKTOP;
         vga_putpixel(ox, oy, bg);
         vga_putpixel(ox, oy+1, bg); vga_putpixel(ox+1, oy+1, bg);
         vga_putpixel(ox, oy+2, bg); vga_putpixel(ox+1, oy+2, bg); vga_putpixel(ox+2, oy+2, bg);
