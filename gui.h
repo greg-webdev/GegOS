@@ -11,6 +11,11 @@
 /* Maximum UI elements */
 #define MAX_WINDOWS 8
 #define MAX_BUTTONS 32
+#define MAX_DIRTY_RECTS 16
+
+/* Cursor size for backup */
+#define CURSOR_WIDTH 12
+#define CURSOR_HEIGHT 12
 
 /* Dirty rectangle for partial updates */
 typedef struct {
@@ -74,8 +79,23 @@ void gui_draw_button(gui_button_t* btn);
 /* Draw mouse cursor */
 void gui_draw_cursor(int x, int y);
 
+/* Erase cursor (restore background) */
+void gui_erase_cursor(void);
+
 /* Invalidate cursor backup (call after full redraw) */
 void gui_cursor_invalidate(void);
+
+/* Add a dirty rectangle to update */
+void gui_add_dirty_rect(int x, int y, int width, int height);
+
+/* Check if there are dirty rectangles */
+int gui_has_dirty_rects(void);
+
+/* Redraw only dirty areas */
+void gui_redraw_dirty(void);
+
+/* Clear all dirty rectangles */
+void gui_clear_dirty_rects(void);
 
 /* Show/hide window */
 void gui_show_window(int window_id, int visible);

@@ -1,6 +1,6 @@
 /*
- * kernel.c - GegOS Kernel v0.3 (Optimized)
- * Stable graphical kernel with reduced flicker
+ * kernel.c - GegOS Kernel v0.4 (Optimized Rendering)
+ * Only redraws areas that changed - no more full screen flicker
  */
 
 #include <stdint.h>
@@ -93,6 +93,9 @@ static uint8_t get_desktop_color(void) {
     }
 }
 
+/* Forward declarations */
+static void redraw_start_menu_area(void);
+
 /* Draw desktop icons */
 static void draw_desktop_icons(void) __attribute__((unused));
 static void draw_desktop_icons(void) {
@@ -116,7 +119,6 @@ static void draw_desktop_icons(void) {
     }
 }
 
-/* Check icon clicks */
 /* Handle start menu button click and menu item clicks */
 static int handle_start_menu_click(int mx, int my) {
     int taskbar_y = SCREEN_HEIGHT - 28;
@@ -130,7 +132,7 @@ static int handle_start_menu_click(int mx, int my) {
         my >= start_y && my < start_y + start_h) {
         /* Toggle start menu */
         start_menu_open = !start_menu_open;
-        needs_redraw = 1;
+        redraw_start_menu_area();  /* Only redraw menu area */
         return 1;
     }
     
@@ -182,7 +184,7 @@ static int handle_start_menu_click(int mx, int my) {
         }
         /* Click outside menu closes it */
         start_menu_open = 0;
-        needs_redraw = 1;
+        redraw_start_menu_area();  /* Only redraw menu area */
         return 1;
     }
     
@@ -234,13 +236,14 @@ static void draw_app_contents(void) {
 static void handle_app_keyboard(char key, int mx, int my) {
     gui_window_t* win;
     
-    /* Invalidate cursor before any drawing */
-    gui_cursor_invalidate();
+    /* Erase cursor before any drawing */
+    gui_erase_cursor();
     
     win = gui_get_window(get_browser_win());
     if (win && win->visible && win->active) {
         browser_handle_key(key);
         browser_draw_content(win);
+        gui_cursor_invalidate();
         gui_draw_cursor(mx, my);
         return;
     }
@@ -249,6 +252,7 @@ static void handle_app_keyboard(char key, int mx, int my) {
     if (win && win->visible && win->active) {
         files_handle_key(key);
         files_draw_content(win);
+        gui_cursor_invalidate();
         gui_draw_cursor(mx, my);
         return;
     }
@@ -257,6 +261,7 @@ static void handle_app_keyboard(char key, int mx, int my) {
     if (win && win->visible && win->active) {
         notepad_handle_key(key);
         notepad_draw_content(win);
+        gui_cursor_invalidate();
         gui_draw_cursor(mx, my);
         return;
     }
@@ -265,6 +270,7 @@ static void handle_app_keyboard(char key, int mx, int my) {
     if (win && win->visible && win->active) {
         terminal_key_handler(key);
         terminal_draw_content(win);
+        gui_cursor_invalidate();
         gui_draw_cursor(mx, my);
         return;
     }
@@ -273,6 +279,7 @@ static void handle_app_keyboard(char key, int mx, int my) {
     if (win && win->visible && win->active) {
         calc_handle_key(key);
         calc_draw_content(win);
+        gui_cursor_invalidate();
         gui_draw_cursor(mx, my);
         return;
     }
@@ -282,12 +289,8 @@ static void handle_app_keyboard(char key, int mx, int my) {
 static int handle_app_click(int mx, int my) {
     gui_window_t* win;
     
-    /* Invalidate cursor before any drawing */
-    gui_cursor_invalidate();
-    
-    /* Save cursor position before redrawing */
-    int save_mx = mx;
-    int save_my = my;
+    /* Erase cursor before any drawing */
+    gui_erase_cursor();
     
     win = gui_get_window(get_files_win());
     if (win && win->visible && win->active) {
@@ -295,7 +298,8 @@ static int handle_app_click(int mx, int my) {
             my >= win->y + 16 && my < win->y + win->height) {
             files_handle_click(win, mx, my);
             files_draw_content(win);
-            gui_draw_cursor(save_mx, save_my);  /* Redraw cursor */
+            gui_cursor_invalidate();
+            gui_draw_cursor(mx, my);
             return 1;
         }
     }
@@ -306,7 +310,8 @@ static int handle_app_click(int mx, int my) {
             my >= win->y + 16 && my < win->y + win->height) {
             calc_handle_click(win, mx, my);
             calc_draw_content(win);
-            gui_draw_cursor(save_mx, save_my);  /* Redraw cursor */
+            gui_cursor_invalidate();
+            gui_draw_cursor(mx, my);
             return 1;
         }
     }
@@ -317,17 +322,18 @@ static int handle_app_click(int mx, int my) {
             my >= win->y + 16 && my < win->y + win->height) {
             settings_handle_click(win, mx, my);
             settings_draw_content(win);
-            gui_draw_cursor(save_mx, save_my);  /* Redraw cursor */
+            gui_cursor_invalidate();
+            gui_draw_cursor(mx, my);
             return 1;
         }
     }
     return 0;
 }
 
-/* Draw everything - simple and fast */
+/* Draw everything - called only on major changes */
 static void full_redraw(void) {
-    /* Invalidate cursor backup since we're redrawing everything */
-    gui_cursor_invalidate();
+    /* Erase cursor properly before redrawing */
+    gui_erase_cursor();
     
     /* Wait for vsync before drawing to reduce tearing */
     vga_vsync();
@@ -371,7 +377,7 @@ static void full_redraw(void) {
         vga_rect(menu_x, menu_y, menu_w, menu_h, COLOR_BLACK);
         
         /* Menu items: Programs, Files, Settings, Shutdown */
-        const char* menu_items[] = {"Programs", "Files", "Settings", "Shutdown", NULL};
+        const char* menu_items[] = {"Programs", "Files", "Settings", "Shutdown", 0};
         for (int i = 0; menu_items[i]; i++) {
             int item_y = menu_y + i * item_h;
             vga_putstring(menu_x + 8, item_y + 6, menu_items[i], COLOR_BLACK, COLOR_LIGHT_GRAY);
@@ -387,12 +393,61 @@ static void full_redraw(void) {
     
     /* Draw app contents inside windows */
     draw_app_contents();
+    
+    /* Invalidate cursor backup since screen changed */
+    gui_cursor_invalidate();
 }
 
-/* Redraw only a specific window and its content */
+/* Redraw only the start menu area */
+static void redraw_start_menu_area(void) {
+    gui_erase_cursor();
+    
+    int taskbar_y = SCREEN_HEIGHT - 28;
+    int menu_x = 2;
+    int menu_y = taskbar_y - 120;
+    int menu_w = 140;
+    int menu_h = 120;
+    
+    if (start_menu_open) {
+        /* Draw menu */
+        int item_h = 20;
+        vga_fillrect(menu_x, menu_y, menu_w, menu_h, COLOR_LIGHT_GRAY);
+        vga_rect(menu_x, menu_y, menu_w, menu_h, COLOR_BLACK);
+        
+        const char* menu_items[] = {"Programs", "Files", "Settings", "Shutdown", 0};
+        for (int i = 0; menu_items[i]; i++) {
+            int item_y = menu_y + i * item_h;
+            vga_putstring(menu_x + 8, item_y + 6, menu_items[i], COLOR_BLACK, COLOR_LIGHT_GRAY);
+        }
+    } else {
+        /* Erase menu area - redraw desktop portion */
+        vga_fillrect(menu_x, menu_y, menu_w, menu_h, get_desktop_color());
+        /* Redraw any icons that might be there */
+        for (int i = 0; desktop_icons[i].label; i++) {
+            int ix = desktop_icons[i].x;
+            int iy = desktop_icons[i].y;
+            /* Check if icon overlaps menu area */
+            if (ix < menu_x + menu_w && ix + 48 > menu_x &&
+                iy < menu_y + menu_h && iy + 40 > menu_y) {
+                vga_fillrect(ix, iy, 48, 32, COLOR_WHITE);
+                vga_rect(ix, iy, 48, 32, COLOR_BLACK);
+                vga_fillrect(ix + 14, iy + 4, 20, 16, COLOR_BLUE);
+                int label_len = 0;
+                const char* s = desktop_icons[i].label;
+                while (*s++) label_len++;
+                int lx = ix + (48 - label_len * 8) / 2;
+                vga_putstring(lx, iy + 23, desktop_icons[i].label, COLOR_BLACK, COLOR_WHITE);
+            }
+        }
+    }
+    
+    gui_cursor_invalidate();
+}
+
+/* Redraw only a specific window and its content - for future use */
 static void redraw_window(int win_id) __attribute__((unused));
 static void redraw_window(int win_id) {
-    gui_cursor_invalidate();
+    gui_erase_cursor();
     
     gui_window_t* win = gui_get_window(win_id);
     if (!win || !win->visible) return;
@@ -408,6 +463,8 @@ static void redraw_window(int win_id) {
     else if (win_id == get_calc_win()) calc_draw_content(win);
     else if (win_id == get_settings_win()) settings_draw_content(win);
     else if (win_id == get_about_win()) about_draw_content(win);
+    
+    gui_cursor_invalidate();
 }
 
 /* Display games menu and return selected game index, -1 for desktop */
@@ -613,9 +670,9 @@ void kernel_main(uint32_t magic, uint32_t* multiboot_info) {
                 }
             }
         } else if (mouse_btn && is_dragging && mouse_moved) {
-            /* Window is being dragged - update position but defer redraw */
+            /* Window is being dragged - update position */
             gui_update();
-            needs_redraw = 1;
+            needs_redraw = 1;  /* Need redraw for window movement */
         } else if (mouse_released) {
             if (is_dragging) {
                 is_dragging = 0;
@@ -635,14 +692,14 @@ void kernel_main(uint32_t magic, uint32_t* multiboot_info) {
         
         /* === RENDERING === */
         
-        /* Only redraw when something actually changed */
+        /* Only full redraw when something major changed */
         if (needs_redraw) {
             full_redraw();
             needs_redraw = 0;
             last_mx = -1;  /* Force cursor redraw */
         }
         
-        /* Update cursor position - this is lightweight, just save/restore pixels */
+        /* Update cursor position - lightweight, save/restore pixels */
         if (mouse_moved || last_mx == -1) {
             gui_draw_cursor(mx, my);
             last_mx = mx;
