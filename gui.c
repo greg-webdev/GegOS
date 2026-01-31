@@ -31,20 +31,13 @@ static int active_window = -1;
 static gui_button_t buttons[MAX_BUTTONS];
 static int num_buttons = 0;
 
-/* Cursor backup for XOR drawing */
-static uint8_t cursor_backup[16 * 16];
+/* Cursor backup for XOR drawing (no longer needed but kept for reference) */
+static uint8_t cursor_backup[16 * 16] __attribute__((unused));
 static int cursor_drawn = 0;
 static int cursor_last_x = -1, cursor_last_y = -1;
 
-/* Forward declaration */
-static void cursor_restore_bg(int x, int y);
-
-/* Invalidate cursor backup - restores cursor background first */
+/* Invalidate cursor backup - just mark as not drawn, XOR handles cleanup */
 void gui_cursor_invalidate(void) {
-    /* Restore old cursor position before invalidating */
-    if (cursor_drawn && cursor_last_x >= 0 && cursor_last_y >= 0) {
-        cursor_restore_bg(cursor_last_x, cursor_last_y);
-    }
     cursor_drawn = 0;
     cursor_last_x = -1;
     cursor_last_y = -1;
@@ -180,34 +173,25 @@ void gui_set_active_window(int window_id) {
     active_window = window_id;
 }
 
-/* Save cursor background */
-/* Save cursor background */
-static void cursor_save_bg(int x, int y) {
-    for (int dy = 0; dy < 12; dy++) {
-        for (int dx = 0; dx < 12; dx++) {
-            if (x + dx < SCREEN_WIDTH && y + dy < SCREEN_HEIGHT && x + dx >= 0 && y + dy >= 0) {
-                cursor_backup[dy * 16 + dx] = vga_getpixel(x + dx, y + dy);
-            }
-        }
-    }
-}
 
-/* Restore cursor background */
-static void cursor_restore_bg(int x, int y) {
-    for (int dy = 0; dy < 12; dy++) {
-        for (int dx = 0; dx < 12; dx++) {
-            if (x + dx < SCREEN_WIDTH && y + dy < SCREEN_HEIGHT && x + dx >= 0 && y + dy >= 0) {
-                vga_putpixel(x + dx, y + dy, cursor_backup[dy * 16 + dx]);
-            }
-        }
-    }
-}
-
-/* Draw mouse cursor - simplified arrow */
+/* Draw mouse cursor - bright yellow (always visible) */
 void gui_draw_cursor(int x, int y) {
-    /* Restore previous position first - but only if we have valid backup */
+    /* Erase old cursor by restoring background color */
     if (cursor_drawn && cursor_last_x >= 0 && cursor_last_y >= 0) {
-        cursor_restore_bg(cursor_last_x, cursor_last_y);
+        int ox = cursor_last_x, oy = cursor_last_y;
+        /* Draw with desktop background color to erase */
+        uint8_t bg = get_desktop_color();
+        vga_putpixel(ox, oy, bg);
+        vga_putpixel(ox, oy+1, bg); vga_putpixel(ox+1, oy+1, bg);
+        vga_putpixel(ox, oy+2, bg); vga_putpixel(ox+1, oy+2, bg); vga_putpixel(ox+2, oy+2, bg);
+        vga_putpixel(ox, oy+3, bg); vga_putpixel(ox+1, oy+3, bg); vga_putpixel(ox+2, oy+3, bg); vga_putpixel(ox+3, oy+3, bg);
+        vga_putpixel(ox, oy+4, bg); vga_putpixel(ox+1, oy+4, bg); vga_putpixel(ox+2, oy+4, bg); vga_putpixel(ox+3, oy+4, bg); vga_putpixel(ox+4, oy+4, bg);
+        vga_putpixel(ox, oy+5, bg); vga_putpixel(ox+1, oy+5, bg); vga_putpixel(ox+2, oy+5, bg); vga_putpixel(ox+3, oy+5, bg); vga_putpixel(ox+4, oy+5, bg); vga_putpixel(ox+5, oy+5, bg);
+        vga_putpixel(ox, oy+6, bg); vga_putpixel(ox+1, oy+6, bg); vga_putpixel(ox+2, oy+6, bg); vga_putpixel(ox+3, oy+6, bg); vga_putpixel(ox+4, oy+6, bg); vga_putpixel(ox+5, oy+6, bg); vga_putpixel(ox+6, oy+6, bg);
+        vga_putpixel(ox, oy+7, bg); vga_putpixel(ox+1, oy+7, bg); vga_putpixel(ox+2, oy+7, bg); vga_putpixel(ox+3, oy+7, bg); vga_putpixel(ox+4, oy+7, bg); vga_putpixel(ox+5, oy+7, bg); vga_putpixel(ox+6, oy+7, bg);
+        vga_putpixel(ox, oy+8, bg); vga_putpixel(ox+1, oy+8, bg); vga_putpixel(ox+2, oy+8, bg); vga_putpixel(ox+3, oy+8, bg); vga_putpixel(ox+4, oy+8, bg);
+        vga_putpixel(ox, oy+9, bg); vga_putpixel(ox+1, oy+9, bg); vga_putpixel(ox+3, oy+9, bg); vga_putpixel(ox+4, oy+9, bg); vga_putpixel(ox+5, oy+9, bg);
+        vga_putpixel(ox, oy+10, bg); vga_putpixel(ox+4, oy+10, bg); vga_putpixel(ox+5, oy+10, bg);
     }
     
     /* Clamp position */
@@ -216,21 +200,18 @@ void gui_draw_cursor(int x, int y) {
     if (x >= SCREEN_WIDTH) x = SCREEN_WIDTH - 1;
     if (y >= SCREEN_HEIGHT) y = SCREEN_HEIGHT - 1;
     
-    /* Save new background */
-    cursor_save_bg(x, y);
-    
-    /* Draw simple arrow cursor (smaller, 12x12) */
-    /* Row 0 */  vga_putpixel(x, y, COLOR_BLACK);
-    /* Row 1 */  vga_putpixel(x, y+1, COLOR_BLACK); vga_putpixel(x+1, y+1, COLOR_BLACK);
-    /* Row 2 */  vga_putpixel(x, y+2, COLOR_BLACK); vga_putpixel(x+1, y+2, COLOR_WHITE); vga_putpixel(x+2, y+2, COLOR_BLACK);
-    /* Row 3 */  vga_putpixel(x, y+3, COLOR_BLACK); vga_putpixel(x+1, y+3, COLOR_WHITE); vga_putpixel(x+2, y+3, COLOR_WHITE); vga_putpixel(x+3, y+3, COLOR_BLACK);
-    /* Row 4 */  vga_putpixel(x, y+4, COLOR_BLACK); vga_putpixel(x+1, y+4, COLOR_WHITE); vga_putpixel(x+2, y+4, COLOR_WHITE); vga_putpixel(x+3, y+4, COLOR_WHITE); vga_putpixel(x+4, y+4, COLOR_BLACK);
-    /* Row 5 */  vga_putpixel(x, y+5, COLOR_BLACK); vga_putpixel(x+1, y+5, COLOR_WHITE); vga_putpixel(x+2, y+5, COLOR_WHITE); vga_putpixel(x+3, y+5, COLOR_WHITE); vga_putpixel(x+4, y+5, COLOR_WHITE); vga_putpixel(x+5, y+5, COLOR_BLACK);
-    /* Row 6 */  vga_putpixel(x, y+6, COLOR_BLACK); vga_putpixel(x+1, y+6, COLOR_WHITE); vga_putpixel(x+2, y+6, COLOR_WHITE); vga_putpixel(x+3, y+6, COLOR_WHITE); vga_putpixel(x+4, y+6, COLOR_WHITE); vga_putpixel(x+5, y+6, COLOR_WHITE); vga_putpixel(x+6, y+6, COLOR_BLACK);
-    /* Row 7 */  vga_putpixel(x, y+7, COLOR_BLACK); vga_putpixel(x+1, y+7, COLOR_WHITE); vga_putpixel(x+2, y+7, COLOR_WHITE); vga_putpixel(x+3, y+7, COLOR_WHITE); vga_putpixel(x+4, y+7, COLOR_BLACK); vga_putpixel(x+5, y+7, COLOR_BLACK); vga_putpixel(x+6, y+7, COLOR_BLACK);
-    /* Row 8 */  vga_putpixel(x, y+8, COLOR_BLACK); vga_putpixel(x+1, y+8, COLOR_WHITE); vga_putpixel(x+2, y+8, COLOR_BLACK); vga_putpixel(x+3, y+8, COLOR_WHITE); vga_putpixel(x+4, y+8, COLOR_BLACK);
-    /* Row 9 */  vga_putpixel(x, y+9, COLOR_BLACK); vga_putpixel(x+1, y+9, COLOR_BLACK); vga_putpixel(x+3, y+9, COLOR_BLACK); vga_putpixel(x+4, y+9, COLOR_WHITE); vga_putpixel(x+5, y+9, COLOR_BLACK);
-    /* Row 10 */ vga_putpixel(x, y+10, COLOR_BLACK); vga_putpixel(x+4, y+10, COLOR_BLACK); vga_putpixel(x+5, y+10, COLOR_BLACK);
+    /* Draw new cursor at new position in bright yellow */
+    vga_putpixel(x, y, COLOR_YELLOW);
+    vga_putpixel(x, y+1, COLOR_YELLOW); vga_putpixel(x+1, y+1, COLOR_YELLOW);
+    vga_putpixel(x, y+2, COLOR_YELLOW); vga_putpixel(x+1, y+2, COLOR_YELLOW); vga_putpixel(x+2, y+2, COLOR_YELLOW);
+    vga_putpixel(x, y+3, COLOR_YELLOW); vga_putpixel(x+1, y+3, COLOR_YELLOW); vga_putpixel(x+2, y+3, COLOR_YELLOW); vga_putpixel(x+3, y+3, COLOR_YELLOW);
+    vga_putpixel(x, y+4, COLOR_YELLOW); vga_putpixel(x+1, y+4, COLOR_YELLOW); vga_putpixel(x+2, y+4, COLOR_YELLOW); vga_putpixel(x+3, y+4, COLOR_YELLOW); vga_putpixel(x+4, y+4, COLOR_YELLOW);
+    vga_putpixel(x, y+5, COLOR_YELLOW); vga_putpixel(x+1, y+5, COLOR_YELLOW); vga_putpixel(x+2, y+5, COLOR_YELLOW); vga_putpixel(x+3, y+5, COLOR_YELLOW); vga_putpixel(x+4, y+5, COLOR_YELLOW); vga_putpixel(x+5, y+5, COLOR_YELLOW);
+    vga_putpixel(x, y+6, COLOR_YELLOW); vga_putpixel(x+1, y+6, COLOR_YELLOW); vga_putpixel(x+2, y+6, COLOR_YELLOW); vga_putpixel(x+3, y+6, COLOR_YELLOW); vga_putpixel(x+4, y+6, COLOR_YELLOW); vga_putpixel(x+5, y+6, COLOR_YELLOW); vga_putpixel(x+6, y+6, COLOR_YELLOW);
+    vga_putpixel(x, y+7, COLOR_YELLOW); vga_putpixel(x+1, y+7, COLOR_YELLOW); vga_putpixel(x+2, y+7, COLOR_YELLOW); vga_putpixel(x+3, y+7, COLOR_YELLOW); vga_putpixel(x+4, y+7, COLOR_YELLOW); vga_putpixel(x+5, y+7, COLOR_YELLOW); vga_putpixel(x+6, y+7, COLOR_YELLOW);
+    vga_putpixel(x, y+8, COLOR_YELLOW); vga_putpixel(x+1, y+8, COLOR_YELLOW); vga_putpixel(x+2, y+8, COLOR_YELLOW); vga_putpixel(x+3, y+8, COLOR_YELLOW); vga_putpixel(x+4, y+8, COLOR_YELLOW);
+    vga_putpixel(x, y+9, COLOR_YELLOW); vga_putpixel(x+1, y+9, COLOR_YELLOW); vga_putpixel(x+3, y+9, COLOR_YELLOW); vga_putpixel(x+4, y+9, COLOR_YELLOW); vga_putpixel(x+5, y+9, COLOR_YELLOW);
+    vga_putpixel(x, y+10, COLOR_YELLOW); vga_putpixel(x+4, y+10, COLOR_YELLOW); vga_putpixel(x+5, y+10, COLOR_YELLOW);
     
     cursor_drawn = 1;
     cursor_last_x = x;
