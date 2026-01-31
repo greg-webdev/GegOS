@@ -406,6 +406,7 @@ void files_handle_key(char key) {
 /* ==================== NOTEPAD APP ==================== */
 
 static int notepad_win = -1;
+static int last_notepad_cursor = -1;
 
 void app_notepad(void) {
     notepad_win = gui_create_window(160, 60, 380, 300, "Notepad");
@@ -415,9 +416,60 @@ void app_notepad(void) {
 void notepad_draw_content(gui_window_t* win) {
     if (!win || !win->visible) return;
     
-    /* Clear content area */
-    vga_fillrect(win->x + 3, win->y + 16, win->width - 6, win->height - 19, COLOR_WHITE);
+    /* Full redraw only if cursor moved backwards or content cleared */
+    if (last_notepad_cursor > notepad_cursor || last_notepad_cursor == -1) {
+        /* Clear content area */
+        vga_fillrect(win->x + 3, win->y + 16, win->width - 6, win->height - 19, COLOR_WHITE);
+        
+        int x = win->x + 5;
+        int y = win->y + 20;
+        int start_x = x;
+        
+        for (int i = 0; i < notepad_cursor && notepad_buffer[i]; i++) {
+            if (notepad_buffer[i] == '\n') {
+                x = start_x;
+                y += 10;
+                if (y > win->y + win->height - 20) break;
+            } else {
+                if (x < win->x + win->width - 10) {
+                    vga_putchar(x, y, notepad_buffer[i], COLOR_BLACK, COLOR_WHITE);
+                    x += 8;
+                }
+            }
+        }
+        last_notepad_cursor = notepad_cursor;
+    } else if (last_notepad_cursor < notepad_cursor) {
+        /* Only draw new character */
+        int x = win->x + 5;
+        int y = win->y + 20;
+        int start_x = x;
+        
+        /* Calculate cursor position */
+        for (int i = 0; i < last_notepad_cursor && notepad_buffer[i]; i++) {
+            if (notepad_buffer[i] == '\n') {
+                x = start_x;
+                y += 10;
+            } else {
+                x += 8;
+            }
+        }
+        
+        /* Draw only the new character */
+        if (last_notepad_cursor < notepad_cursor && x < win->x + win->width - 10 && y < win->y + win->height - 20) {
+            char new_char = notepad_buffer[last_notepad_cursor];
+            if (new_char == '\n') {
+                /* Just update position tracking */
+            } else {
+                /* Clear old cursor */
+                vga_fillrect(x, y, 10, 8, COLOR_WHITE);
+                vga_putchar(x, y, new_char, COLOR_BLACK, COLOR_WHITE);
+                x += 8;
+            }
+        }
+        last_notepad_cursor = notepad_cursor;
+    }
     
+    /* Draw cursor at current position */
     int x = win->x + 5;
     int y = win->y + 20;
     int start_x = x;
@@ -426,16 +478,11 @@ void notepad_draw_content(gui_window_t* win) {
         if (notepad_buffer[i] == '\n') {
             x = start_x;
             y += 10;
-            if (y > win->y + win->height - 20) break;
         } else {
-            if (x < win->x + win->width - 10) {
-                vga_putchar(x, y, notepad_buffer[i], COLOR_BLACK, COLOR_WHITE);
-                x += 8;
-            }
+            x += 8;
         }
     }
     
-    /* Cursor */
     if (x < win->x + win->width - 10 && y < win->y + win->height - 10) {
         vga_fillrect(x, y, 2, 8, COLOR_BLACK);
     }
@@ -486,6 +533,7 @@ void terminal_key_handler(char key) {
 /* ==================== CALCULATOR APP ==================== */
 
 static int calc_win = -1;
+static char last_calc_display[16] = "";
 
 void app_calculator(void) {
     calc_win = gui_create_window(200, 100, 160, 200, "Calc");
@@ -500,31 +548,57 @@ void app_calculator(void) {
 void calc_draw_content(gui_window_t* win) {
     if (!win || !win->visible) return;
     
-    /* Clear content area */
-    vga_fillrect(win->x + 3, win->y + 16, win->width - 6, win->height - 19, COLOR_LIGHT_GRAY);
-    
     int x = win->x + 5;
     int y = win->y + 20;
     
-    /* Display */
-    vga_fillrect(x, y, win->width - 12, 16, COLOR_WHITE);
-    vga_rect(x, y, win->width - 12, 16, COLOR_BLACK);
-    vga_putstring(x + 4, y + 4, calc_display, COLOR_BLACK, COLOR_WHITE);
-    
-    /* Buttons */
-    const char* btns[] = {"7", "8", "9", "+", "4", "5", "6", "-", "1", "2", "3", "*", "C", "0", "=", "/"};
-    int bx = x, by = y + 20;
-    
+    /* Only redraw display if it changed */
+    int display_changed = 0;
     for (int i = 0; i < 16; i++) {
-        vga_fillrect(bx, by, 18, 16, COLOR_WHITE);
-        vga_rect(bx, by, 18, 16, COLOR_BLACK);
-        vga_putchar(bx + 5, by + 4, btns[i][0], COLOR_BLACK, COLOR_WHITE);
-        
-        bx += 22;
-        if ((i + 1) % 4 == 0) {
-            bx = x;
-            by += 18;
+        if (last_calc_display[i] != calc_display[i]) {
+            display_changed = 1;
+            break;
         }
+    }
+    
+    if (display_changed || last_calc_display[0] == 0) {
+        /* Clear and redraw only display area */
+        vga_fillrect(x, y, win->width - 12, 16, COLOR_WHITE);
+        vga_rect(x, y, win->width - 12, 16, COLOR_BLACK);
+        vga_putstring(x + 4, y + 4, calc_display, COLOR_BLACK, COLOR_WHITE);
+        
+        /* Save current display */
+        for (int i = 0; i < 16; i++) {
+            last_calc_display[i] = calc_display[i];
+        }
+    }
+    
+    /* Draw buttons only on first draw */
+    static int buttons_drawn = 0;
+    if (!buttons_drawn || win->dirty_region.dirty) {
+        /* Clear content area */
+        vga_fillrect(win->x + 3, win->y + 16, win->width - 6, win->height - 19, COLOR_LIGHT_GRAY);
+        
+        /* Redraw display */
+        vga_fillrect(x, y, win->width - 12, 16, COLOR_WHITE);
+        vga_rect(x, y, win->width - 12, 16, COLOR_BLACK);
+        vga_putstring(x + 4, y + 4, calc_display, COLOR_BLACK, COLOR_WHITE);
+        
+        /* Buttons */
+        const char* btns[] = {"7", "8", "9", "+", "4", "5", "6", "-", "1", "2", "3", "*", "C", "0", "=", "/"};
+        int bx = x, by = y + 20;
+        
+        for (int i = 0; i < 16; i++) {
+            vga_fillrect(bx, by, 18, 16, COLOR_WHITE);
+            vga_rect(bx, by, 18, 16, COLOR_BLACK);
+            vga_putchar(bx + 5, by + 4, btns[i][0], COLOR_BLACK, COLOR_WHITE);
+            
+            bx += 22;
+            if ((i + 1) % 4 == 0) {
+                bx = x;
+                by += 18;
+            }
+        }
+        buttons_drawn = 1;
     }
 }
 

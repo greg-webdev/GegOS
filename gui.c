@@ -43,6 +43,40 @@ void gui_cursor_invalidate(void) {
     cursor_last_y = -1;
 }
 
+/* Mark window region as dirty */
+void gui_mark_dirty(int window_id, int x, int y, int width, int height) {
+    if (window_id < 0 || window_id >= num_windows) return;
+    
+    gui_window_t* win = &windows[window_id];
+    if (!win->dirty_region.dirty) {
+        win->dirty_region.x = x;
+        win->dirty_region.y = y;
+        win->dirty_region.width = width;
+        win->dirty_region.height = height;
+        win->dirty_region.dirty = 1;
+    } else {
+        /* Expand dirty region to include new area */
+        int x2 = win->dirty_region.x + win->dirty_region.width;
+        int y2 = win->dirty_region.y + win->dirty_region.height;
+        int new_x2 = x + width;
+        int new_y2 = y + height;
+        
+        if (x < win->dirty_region.x) win->dirty_region.x = x;
+        if (y < win->dirty_region.y) win->dirty_region.y = y;
+        if (new_x2 > x2) x2 = new_x2;
+        if (new_y2 > y2) y2 = new_y2;
+        
+        win->dirty_region.width = x2 - win->dirty_region.x;
+        win->dirty_region.height = y2 - win->dirty_region.y;
+    }
+}
+
+/* Clear dirty flags */
+void gui_clear_dirty(int window_id) {
+    if (window_id < 0 || window_id >= num_windows) return;
+    windows[window_id].dirty_region.dirty = 0;
+}
+
 /* Point in rect check */
 int point_in_rect(int px, int py, int rx, int ry, int rw, int rh) {
     return px >= rx && px < rx + rw && py >= ry && py < ry + rh;
@@ -80,6 +114,7 @@ int gui_create_window(int x, int y, int width, int height, const char* title) {
     win->active = 0;
     win->dragging = 0;
     win->visible = 1;
+    win->dirty_region.dirty = 0;
     
     return id;
 }

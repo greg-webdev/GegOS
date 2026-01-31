@@ -12,6 +12,13 @@
 #define MAX_WINDOWS 8
 #define MAX_BUTTONS 32
 
+/* Dirty rectangle for partial updates */
+typedef struct {
+    int x, y;
+    int width, height;
+    int dirty;
+} dirty_rect_t;
+
 /* Window structure */
 typedef struct {
     int x, y;
@@ -21,6 +28,7 @@ typedef struct {
     int dragging;
     int drag_offset_x, drag_offset_y;
     int visible;
+    dirty_rect_t dirty_region;
 } gui_window_t;
 
 /* Button structure */
