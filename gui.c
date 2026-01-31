@@ -36,6 +36,13 @@ static uint8_t cursor_backup[16 * 16];
 static int cursor_drawn = 0;
 static int cursor_last_x = -1, cursor_last_y = -1;
 
+/* Invalidate cursor backup - call after full screen redraw */
+void gui_cursor_invalidate(void) {
+    cursor_drawn = 0;
+    cursor_last_x = -1;
+    cursor_last_y = -1;
+}
+
 /* Point in rect check */
 int point_in_rect(int px, int py, int rx, int ry, int rw, int rh) {
     return px >= rx && px < rx + rw && py >= ry && py < ry + rh;
@@ -156,8 +163,8 @@ static void cursor_restore_bg(int x, int y) {
 
 /* Draw mouse cursor - simplified arrow */
 void gui_draw_cursor(int x, int y) {
-    /* Restore previous position first */
-    if (cursor_drawn) {
+    /* Restore previous position first - but only if we have valid backup */
+    if (cursor_drawn && cursor_last_x >= 0 && cursor_last_y >= 0) {
         cursor_restore_bg(cursor_last_x, cursor_last_y);
     }
     

@@ -66,6 +66,9 @@ void gui_draw_button(gui_button_t* btn);
 /* Draw mouse cursor */
 void gui_draw_cursor(int x, int y);
 
+/* Invalidate cursor backup (call after full redraw) */
+void gui_cursor_invalidate(void);
+
 /* Show/hide window */
 void gui_show_window(int window_id, int visible);
 

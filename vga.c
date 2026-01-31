@@ -1,6 +1,6 @@
 /*
  * vga.c - VGA Graphics Driver for GegOS
- * Mode 13h: 320x200, 256 colors, linear framebuffer
+ * Mode 12h: 640x480, 16 colors, planar
  */
 
 #include "vga.h"
@@ -19,32 +19,39 @@ static uint8_t* const VGA_MEMORY = (uint8_t*)0xA0000;
 #define VGA_GC_DATA         0x3CF
 #define VGA_AC_INDEX        0x3C0
 #define VGA_AC_WRITE        0x3C0
-#define VGA_AC_READ         0x3C1
 #define VGA_INSTAT_READ     0x3DA
 
-/* Mode 13h register values */
-static const uint8_t mode13h_misc = 0x63;
+/* Graphics controller registers */
+#define GC_GRAPHICS_MODE    0x05
+#define GC_BIT_MASK         0x08
+#define GC_READ_MAP_SELECT  0x04
 
-static const uint8_t mode13h_seq[] = {
-    0x03, 0x01, 0x0F, 0x00, 0x0E
+/* Sequencer registers */
+#define SEQ_MAP_MASK        0x02
+
+/* Mode 12h register values (640x480, 16 color) */
+static const uint8_t mode12h_misc = 0xE3;
+
+static const uint8_t mode12h_seq[] = {
+    0x03, 0x01, 0x0F, 0x00, 0x06
 };
 
-static const uint8_t mode13h_crtc[] = {
-    0x5F, 0x4F, 0x50, 0x82, 0x54, 0x80, 0xBF, 0x1F,
-    0x00, 0x41, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x9C, 0x0E, 0x8F, 0x28, 0x40, 0x96, 0xB9, 0xA3,
+static const uint8_t mode12h_crtc[] = {
+    0x5F, 0x4F, 0x50, 0x82, 0x54, 0x80, 0x0B, 0x3E,
+    0x00, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0xEA, 0x0C, 0xDF, 0x28, 0x00, 0xE7, 0x04, 0xE3,
     0xFF
 };
 
-static const uint8_t mode13h_gc[] = {
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x05, 0x0F,
+static const uint8_t mode12h_gc[] = {
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x05, 0x0F,
     0xFF
 };
 
-static const uint8_t mode13h_ac[] = {
-    0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
-    0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F,
-    0x41, 0x00, 0x0F, 0x00, 0x00
+static const uint8_t mode12h_ac[] = {
+    0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x14, 0x07,
+    0x38, 0x39, 0x3A, 0x3B, 0x3C, 0x3D, 0x3E, 0x3F,
+    0x01, 0x00, 0x0F, 0x00, 0x00
 };
 
 /* Simple 8x8 bitmap font */
@@ -57,7 +64,7 @@ static const uint8_t font8x8[128][8] = {
     ['$'] = {0x18,0x7E,0xC0,0x7C,0x06,0xFC,0x18,0x00},
     ['%'] = {0x00,0xC6,0xCC,0x18,0x30,0x66,0xC6,0x00},
     ['&'] = {0x38,0x6C,0x38,0x76,0xDC,0xCC,0x76,0x00},
-    ['\'']= {0x18,0x18,0x30,0x00,0x00,0x00,0x00,0x00},
+    [39]  = {0x18,0x18,0x30,0x00,0x00,0x00,0x00,0x00},
     ['('] = {0x0C,0x18,0x30,0x30,0x30,0x18,0x0C,0x00},
     [')'] = {0x30,0x18,0x0C,0x0C,0x0C,0x18,0x30,0x00},
     ['*'] = {0x00,0x66,0x3C,0xFF,0x3C,0x66,0x00,0x00},
@@ -110,7 +117,7 @@ static const uint8_t font8x8[128][8] = {
     ['Y'] = {0x66,0x66,0x66,0x3C,0x18,0x18,0x3C,0x00},
     ['Z'] = {0xFE,0xC6,0x8C,0x18,0x32,0x66,0xFE,0x00},
     ['['] = {0x3C,0x30,0x30,0x30,0x30,0x30,0x3C,0x00},
-    ['\\']= {0xC0,0x60,0x30,0x18,0x0C,0x06,0x02,0x00},
+    [92]  = {0xC0,0x60,0x30,0x18,0x0C,0x06,0x02,0x00},
     [']'] = {0x3C,0x0C,0x0C,0x0C,0x0C,0x0C,0x3C,0x00},
     ['^'] = {0x10,0x38,0x6C,0xC6,0x00,0x00,0x00,0x00},
     ['_'] = {0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xFF},
@@ -148,17 +155,26 @@ static const uint8_t font8x8[128][8] = {
     [127] = {0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00}
 };
 
-/* Initialize VGA Mode 13h */
+/* Bytes per line in planar mode */
+#define BYTES_PER_LINE 80
+
+/* Set read plane */
+static void set_read_plane(uint8_t plane) {
+    outb(VGA_GC_INDEX, GC_READ_MAP_SELECT);
+    outb(VGA_GC_DATA, plane);
+}
+
+/* Initialize VGA Mode 12h (640x480, 16 colors) */
 void vga_init(void) {
     int i;
     
     /* Write miscellaneous register */
-    outb(VGA_MISC_WRITE, mode13h_misc);
+    outb(VGA_MISC_WRITE, mode12h_misc);
     
     /* Write sequencer registers */
     for (i = 0; i < 5; i++) {
         outb(VGA_SEQ_INDEX, i);
-        outb(VGA_SEQ_DATA, mode13h_seq[i]);
+        outb(VGA_SEQ_DATA, mode12h_seq[i]);
     }
     
     /* Unlock CRTC registers */
@@ -170,20 +186,20 @@ void vga_init(void) {
     /* Write CRTC registers */
     for (i = 0; i < 25; i++) {
         outb(VGA_CRTC_INDEX, i);
-        outb(VGA_CRTC_DATA, mode13h_crtc[i]);
+        outb(VGA_CRTC_DATA, mode12h_crtc[i]);
     }
     
     /* Write graphics controller registers */
     for (i = 0; i < 9; i++) {
         outb(VGA_GC_INDEX, i);
-        outb(VGA_GC_DATA, mode13h_gc[i]);
+        outb(VGA_GC_DATA, mode12h_gc[i]);
     }
     
     /* Write attribute controller registers */
     inb(VGA_INSTAT_READ);  /* Reset flip-flop */
     for (i = 0; i < 21; i++) {
         outb(VGA_AC_INDEX, i);
-        outb(VGA_AC_WRITE, mode13h_ac[i]);
+        outb(VGA_AC_WRITE, mode12h_ac[i]);
     }
     
     /* Enable display */
@@ -194,27 +210,60 @@ void vga_init(void) {
     vga_clear(COLOR_BLACK);
 }
 
-/* Clear screen */
+/* Clear screen - write to all planes */
 void vga_clear(uint8_t color) {
-    uint8_t* vga = VGA_MEMORY;
-    for (int i = 0; i < SCREEN_WIDTH * SCREEN_HEIGHT; i++) {
-        vga[i] = color;
+    for (int plane = 0; plane < 4; plane++) {
+        outb(VGA_SEQ_INDEX, SEQ_MAP_MASK);
+        outb(VGA_SEQ_DATA, 1 << plane);
+        uint8_t plane_val = (color & (1 << plane)) ? 0xFF : 0x00;
+        
+        uint8_t* vga = VGA_MEMORY;
+        for (int i = 0; i < BYTES_PER_LINE * SCREEN_HEIGHT; i++) {
+            vga[i] = plane_val;
+        }
     }
+    outb(VGA_SEQ_INDEX, SEQ_MAP_MASK);
+    outb(VGA_SEQ_DATA, 0x0F);
 }
 
-/* Draw pixel */
+/* Draw pixel using write mode 2 */
 void vga_putpixel(int x, int y, uint8_t color) {
-    if (x >= 0 && x < SCREEN_WIDTH && y >= 0 && y < SCREEN_HEIGHT) {
-        VGA_MEMORY[y * SCREEN_WIDTH + x] = color;
-    }
+    if (x < 0 || x >= SCREEN_WIDTH || y < 0 || y >= SCREEN_HEIGHT) return;
+    
+    int offset = y * BYTES_PER_LINE + x / 8;
+    uint8_t mask = 0x80 >> (x & 7);
+    
+    outb(VGA_GC_INDEX, GC_GRAPHICS_MODE);
+    outb(VGA_GC_DATA, 0x02);
+    
+    outb(VGA_GC_INDEX, GC_BIT_MASK);
+    outb(VGA_GC_DATA, mask);
+    
+    volatile uint8_t dummy = VGA_MEMORY[offset];
+    (void)dummy;
+    VGA_MEMORY[offset] = color;
+    
+    outb(VGA_GC_INDEX, GC_GRAPHICS_MODE);
+    outb(VGA_GC_DATA, 0x00);
+    outb(VGA_GC_INDEX, GC_BIT_MASK);
+    outb(VGA_GC_DATA, 0xFF);
 }
 
 /* Get pixel */
 uint8_t vga_getpixel(int x, int y) {
-    if (x >= 0 && x < SCREEN_WIDTH && y >= 0 && y < SCREEN_HEIGHT) {
-        return VGA_MEMORY[y * SCREEN_WIDTH + x];
+    if (x < 0 || x >= SCREEN_WIDTH || y < 0 || y >= SCREEN_HEIGHT) return 0;
+    
+    int offset = y * BYTES_PER_LINE + x / 8;
+    uint8_t mask = 0x80 >> (x & 7);
+    uint8_t color = 0;
+    
+    for (int plane = 0; plane < 4; plane++) {
+        set_read_plane(plane);
+        if (VGA_MEMORY[offset] & mask) {
+            color |= (1 << plane);
+        }
     }
-    return 0;
+    return color;
 }
 
 /* Horizontal line */
@@ -237,26 +286,16 @@ void vga_line(int x1, int y1, int x2, int y2, uint8_t color) {
     int dy = y2 - y1;
     int sx = (dx > 0) ? 1 : -1;
     int sy = (dy > 0) ? 1 : -1;
-    
     if (dx < 0) dx = -dx;
     if (dy < 0) dy = -dy;
-    
     int err = dx - dy;
     
     while (1) {
         vga_putpixel(x1, y1, color);
-        
         if (x1 == x2 && y1 == y2) break;
-        
         int e2 = 2 * err;
-        if (e2 > -dy) {
-            err -= dy;
-            x1 += sx;
-        }
-        if (e2 < dx) {
-            err += dx;
-            y1 += sy;
-        }
+        if (e2 > -dy) { err -= dy; x1 += sx; }
+        if (e2 < dx) { err += dx; y1 += sy; }
     }
 }
 
@@ -277,12 +316,9 @@ void vga_fillrect(int x, int y, int width, int height, uint8_t color) {
     }
 }
 
-/* Circle outline (midpoint algorithm) */
+/* Circle outline */
 void vga_circle(int cx, int cy, int radius, uint8_t color) {
-    int x = radius;
-    int y = 0;
-    int err = 0;
-    
+    int x = radius, y = 0, err = 0;
     while (x >= y) {
         vga_putpixel(cx + x, cy + y, color);
         vga_putpixel(cx + y, cy + x, color);
@@ -292,15 +328,9 @@ void vga_circle(int cx, int cy, int radius, uint8_t color) {
         vga_putpixel(cx - y, cy - x, color);
         vga_putpixel(cx + y, cy - x, color);
         vga_putpixel(cx + x, cy - y, color);
-        
         y++;
-        if (err <= 0) {
-            err += 2 * y + 1;
-        }
-        if (err > 0) {
-            x--;
-            err -= 2 * x + 1;
-        }
+        if (err <= 0) err += 2 * y + 1;
+        if (err > 0) { x--; err -= 2 * x + 1; }
     }
 }
 
@@ -319,9 +349,7 @@ void vga_fillcircle(int cx, int cy, int radius, uint8_t color) {
 void vga_putchar(int x, int y, char c, uint8_t fg, uint8_t bg) {
     unsigned char uc = (unsigned char)c;
     if (uc > 127) uc = '?';
-    
     const uint8_t* glyph = font8x8[uc];
-    
     for (int row = 0; row < 8; row++) {
         for (int col = 0; col < 8; col++) {
             uint8_t pixel = (glyph[row] >> (7 - col)) & 1;
@@ -334,13 +362,8 @@ void vga_putchar(int x, int y, char c, uint8_t fg, uint8_t bg) {
 void vga_putstring(int x, int y, const char* str, uint8_t fg, uint8_t bg) {
     int startx = x;
     while (*str) {
-        if (*str == '\n') {
-            x = startx;
-            y += 8;
-        } else {
-            vga_putchar(x, y, *str, fg, bg);
-            x += 8;
-        }
+        if (*str == '\n') { x = startx; y += 8; }
+        else { vga_putchar(x, y, *str, fg, bg); x += 8; }
         str++;
     }
 }
@@ -351,7 +374,7 @@ void vga_vsync(void) {
     while (!(inb(VGA_INSTAT_READ) & 0x08));
 }
 
-/* Swap buffer (placeholder - no double buffering in Mode 13h) */
+/* Swap buffer */
 void vga_swap(void) {
     vga_vsync();
 }

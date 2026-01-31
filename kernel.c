@@ -64,13 +64,13 @@ static void click_settings(void) { app_settings(); needs_redraw = 1; }
 static void click_about(void) { app_about(); needs_redraw = 1; }
 
 static desktop_icon_t desktop_icons[] = {
-    {10, 25, "Browser", click_browser},
-    {10, 70, "Files", click_files},
-    {10, 115, "Notepad", click_notepad},
-    {10, 160, "Terminal", click_terminal},
-    {260, 25, "Calc", click_calc},
-    {260, 70, "Settings", click_settings},
-    {260, 115, "About", click_about},
+    {20, 40, "Browser", click_browser},
+    {20, 100, "Files", click_files},
+    {20, 160, "Notepad", click_notepad},
+    {20, 220, "Terminal", click_terminal},
+    {20, 280, "Calc", click_calc},
+    {20, 340, "Settings", click_settings},
+    {20, 400, "About", click_about},
     {0, 0, 0, 0}
 };
 
@@ -226,6 +226,9 @@ static void handle_app_click(int mx, int my) {
 
 /* Draw everything once */
 static void full_redraw(void) {
+    /* Invalidate cursor backup since we're redrawing everything */
+    gui_cursor_invalidate();
+    
     /* Wait for vsync before drawing to reduce tearing */
     vga_vsync();
     
@@ -255,10 +258,10 @@ void kernel_main(uint32_t magic, uint32_t* multiboot_info) {
     
     /* Show loading screen */
     vga_clear(COLOR_BLUE);
-    vga_fillrect(80, 70, 160, 60, COLOR_WHITE);
-    vga_rect(80, 70, 160, 60, COLOR_BLACK);
-    vga_putstring(110, 85, "GegOS v0.3", COLOR_BLACK, COLOR_WHITE);
-    vga_putstring(95, 105, "Starting...", COLOR_DARK_GRAY, COLOR_WHITE);
+    vga_fillrect(220, 180, 200, 80, COLOR_WHITE);
+    vga_rect(220, 180, 200, 80, COLOR_BLACK);
+    vga_putstring(260, 200, "GegOS v0.4", COLOR_BLACK, COLOR_WHITE);
+    vga_putstring(250, 230, "Starting...", COLOR_DARK_GRAY, COLOR_WHITE);
     
     /* Delay during startup */
     for (volatile int i = 0; i < 3000000; i++);
@@ -301,10 +304,11 @@ void kernel_main(uint32_t magic, uint32_t* multiboot_info) {
         int my = mouse_get_y();
         int mouse_btn = mouse_button_down(MOUSE_LEFT);
         int mouse_clicked = mouse_btn && !last_mouse_btn;
+        int mouse_released = !mouse_btn && last_mouse_btn;
         int mouse_moved = (mx != last_mx || my != last_my);
         
         /* Track dragging for windows */
-        static int was_dragging = 0;
+        static int is_dragging = 0;
         
         /* Handle mouse clicks */
         if (mouse_clicked) {
@@ -318,14 +322,22 @@ void kernel_main(uint32_t magic, uint32_t* multiboot_info) {
             /* Handle app-specific clicks */
             handle_app_click(mx, my);
             
+            /* Check if we started dragging */
+            for (int i = 0; i < 16; i++) {
+                gui_window_t* win = gui_get_window(i);
+                if (win && win->dragging) {
+                    is_dragging = 1;
+                    break;
+                }
+            }
+            
             needs_redraw = 1;
-        } else if (mouse_btn) {
-            /* Dragging */
+        } else if (mouse_btn && is_dragging && mouse_moved) {
+            /* Window is being dragged and mouse moved - update */
             gui_update();
-            was_dragging = 1;
             needs_redraw = 1;
-        } else if (was_dragging) {
-            was_dragging = 0;
+        } else if (mouse_released && is_dragging) {
+            is_dragging = 0;
             needs_redraw = 1;
         }
         
@@ -341,14 +353,14 @@ void kernel_main(uint32_t magic, uint32_t* multiboot_info) {
         
         /* === RENDERING === */
         
-        /* Only redraw when something changed */
+        /* Only redraw when something actually changed */
         if (needs_redraw) {
             full_redraw();
             needs_redraw = 0;
             last_mx = -1;  /* Force cursor redraw */
         }
         
-        /* Always update cursor position smoothly */
+        /* Update cursor position - this is lightweight, just save/restore pixels */
         if (mouse_moved || last_mx == -1) {
             gui_draw_cursor(mx, my);
             last_mx = mx;

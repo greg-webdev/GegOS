@@ -253,7 +253,7 @@ static int browser_win = -1;
 
 void app_browser(void) {
     browser_page = 0;
-    browser_win = gui_create_window(20, 20, 200, 150, "GegBrowse");
+    browser_win = gui_create_window(120, 50, 400, 300, "GegBrowse");
     gui_set_active_window(browser_win);
 }
 
@@ -304,7 +304,7 @@ static int files_win = -1;
 static int files_selected = -1;
 
 void app_files(void) {
-    files_win = gui_create_window(30, 35, 180, 130, "Files");
+    files_win = gui_create_window(140, 70, 360, 280, "Files");
     files_selected = -1;
     gui_set_active_window(files_win);
 }
@@ -378,7 +378,7 @@ void files_handle_key(char key) {
 static int notepad_win = -1;
 
 void app_notepad(void) {
-    notepad_win = gui_create_window(50, 25, 180, 140, "Notepad");
+    notepad_win = gui_create_window(160, 60, 380, 300, "Notepad");
     gui_set_active_window(notepad_win);
 }
 
@@ -435,7 +435,7 @@ void notepad_handle_key(char key) {
 static int terminal_win = -1;
 
 void app_terminal(void) {
-    terminal_win = gui_create_window(10, 50, 200, 120, "Terminal");
+    terminal_win = gui_create_window(130, 90, 420, 280, "Terminal");
     terminal_cursor = 0;
     terminal_out_len = 0;
     
@@ -558,7 +558,7 @@ void terminal_handle_key(char key) {
 static int calc_win = -1;
 
 void app_calculator(void) {
-    calc_win = gui_create_window(80, 40, 100, 120, "Calc");
+    calc_win = gui_create_window(200, 100, 160, 200, "Calc");
     calc_value = 0;
     calc_operand = 0;
     calc_op = 0;
@@ -697,7 +697,7 @@ void calc_handle_key(char key) {
 static int about_win = -1;
 
 void app_about(void) {
-    about_win = gui_create_window(60, 50, 160, 100, "About GegOS");
+    about_win = gui_create_window(180, 120, 280, 180, "About GegOS");
     gui_set_active_window(about_win);
 }
 
@@ -726,7 +726,7 @@ void about_draw_content(gui_window_t* win) {
 /* ==================== SETTINGS APP ==================== */
 
 void app_settings(void) {
-    settings_win = gui_create_window(50, 30, 180, 140, "Settings");
+    settings_win = gui_create_window(150, 80, 320, 280, "Settings");
     gui_set_active_window(settings_win);
 }
 
