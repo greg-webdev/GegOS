@@ -47,6 +47,9 @@ extern int get_settings_mouse_speed(void);
 /* Global redraw flag */
 static int needs_redraw = 1;
 
+/* Start menu state */
+static int start_menu_open = 0;
+
 /* Desktop icon positions */
 typedef struct {
     int x, y;
@@ -109,6 +112,78 @@ static void draw_desktop_icons(void) {
 }
 
 /* Check icon clicks */
+/* Handle start menu button click and menu item clicks */
+static int handle_start_menu_click(int mx, int my) {
+    int taskbar_y = SCREEN_HEIGHT - 28;
+    int start_x = 2;
+    int start_y = taskbar_y + 3;
+    int start_w = 60;
+    int start_h = 22;
+    
+    /* Check if start button was clicked */
+    if (mx >= start_x && mx < start_x + start_w &&
+        my >= start_y && my < start_y + start_h) {
+        /* Toggle start menu */
+        start_menu_open = !start_menu_open;
+        needs_redraw = 1;
+        return 1;
+    }
+    
+    /* If start menu is open, check menu items */
+    if (start_menu_open) {
+        /* Start menu items are at: x=2, starting at y=taskbar_y-120 */
+        int menu_x = start_x;
+        int menu_y = taskbar_y - 120;
+        int menu_w = 140;
+        int item_h = 20;
+        
+        /* Check for menu item clicks */
+        if (mx >= menu_x && mx < menu_x + menu_w && my >= menu_y) {
+            int item = (my - menu_y) / item_h;
+            
+            /* Menu items: Programs (0), Files (1), Settings (2), Shutdown (3) */
+            if (item == 0) {
+                /* Programs - open file browser for now */
+                get_files_win();
+                start_menu_open = 0;
+                needs_redraw = 1;
+                return 1;
+            } else if (item == 1) {
+                /* Files */
+                gui_window_t* win = gui_get_window(get_files_win());
+                if (win) {
+                    win->visible = 1;
+                    win->active = 1;
+                }
+                start_menu_open = 0;
+                needs_redraw = 1;
+                return 1;
+            } else if (item == 2) {
+                /* Settings */
+                gui_window_t* win = gui_get_window(get_settings_win());
+                if (win) {
+                    win->visible = 1;
+                    win->active = 1;
+                }
+                start_menu_open = 0;
+                needs_redraw = 1;
+                return 1;
+            } else if (item == 3) {
+                /* Shutdown - just hide all windows and show message */
+                start_menu_open = 0;
+                needs_redraw = 1;
+                return 1;
+            }
+        }
+        /* Click outside menu closes it */
+        start_menu_open = 0;
+        needs_redraw = 1;
+        return 1;
+    }
+    
+    return 0;
+}
+
 static int check_icon_click(int mx, int my) {
     for (int i = 0; desktop_icons[i].label; i++) {
         int x = desktop_icons[i].x;
@@ -277,6 +352,31 @@ static void full_redraw(void) {
     /* Draw taskbar */
     gui_draw_menubar();
     
+    /* Draw start menu if open */
+    if (start_menu_open) {
+        int taskbar_y = SCREEN_HEIGHT - 28;
+        int menu_x = 2;
+        int menu_y = taskbar_y - 120;
+        int menu_w = 140;
+        int menu_h = 120;
+        int item_h = 20;
+        
+        /* Menu background with border */
+        vga_fillrect(menu_x, menu_y, menu_w, menu_h, COLOR_LIGHT_GRAY);
+        vga_rect(menu_x, menu_y, menu_w, menu_h, COLOR_BLACK);
+        
+        /* Menu items: Programs, Files, Settings, Shutdown */
+        const char* menu_items[] = {"Programs", "Files", "Settings", "Shutdown", NULL};
+        for (int i = 0; menu_items[i]; i++) {
+            int item_y = menu_y + i * item_h;
+            vga_putstring(menu_x + 8, item_y + 6, menu_items[i], COLOR_BLACK, COLOR_LIGHT_GRAY);
+            /* Separator line */
+            if (i == 2) {
+                vga_hline(menu_x + 2, item_y + item_h - 2, menu_w - 4, COLOR_LIGHT_GRAY);
+            }
+        }
+    }
+    
     /* Draw windows */
     gui_draw();
     
@@ -372,6 +472,9 @@ void kernel_main(uint32_t magic, uint32_t* multiboot_info) {
         if (mouse_clicked) {
             int old_active = active_win_id;
             gui_update();
+            
+            /* Check start menu first */
+            handle_start_menu_click(mx, my);
             
             /* Check desktop icons */
             if (my > 12) {
