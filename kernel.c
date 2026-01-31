@@ -191,16 +191,21 @@ static void handle_app_keyboard(char key) {
 }
 
 /* Handle mouse click for active app */
-static void handle_app_click(int mx, int my) {
+static int handle_app_click(int mx, int my) {
     gui_window_t* win;
+    
+    /* Save cursor position before redrawing */
+    int save_mx = mx;
+    int save_my = my;
     
     win = gui_get_window(get_files_win());
     if (win && win->visible && win->active) {
         if (mx >= win->x && mx < win->x + win->width &&
             my >= win->y + 16 && my < win->y + win->height) {
             files_handle_click(win, mx, my);
-            needs_redraw = 1;
-            return;
+            files_draw_content(win);
+            gui_draw_cursor(save_mx, save_my);  /* Redraw cursor */
+            return 1;
         }
     }
     
@@ -209,8 +214,9 @@ static void handle_app_click(int mx, int my) {
         if (mx >= win->x && mx < win->x + win->width &&
             my >= win->y + 16 && my < win->y + win->height) {
             calc_handle_click(win, mx, my);
-            needs_redraw = 1;
-            return;
+            calc_draw_content(win);
+            gui_draw_cursor(save_mx, save_my);  /* Redraw cursor */
+            return 1;
         }
     }
     
@@ -219,10 +225,12 @@ static void handle_app_click(int mx, int my) {
         if (mx >= win->x && mx < win->x + win->width &&
             my >= win->y + 16 && my < win->y + win->height) {
             settings_handle_click(win, mx, my);
-            needs_redraw = 1;
-            return;
+            settings_draw_content(win);
+            gui_draw_cursor(save_mx, save_my);  /* Redraw cursor */
+            return 1;
         }
     }
+    return 0;
 }
 
 /* Draw everything with tiled reveal effect */
@@ -391,17 +399,22 @@ void kernel_main(uint32_t magic, uint32_t* multiboot_info) {
                 check_icon_click(mx, my);
             }
             
-            /* Handle app-specific clicks */
-            handle_app_click(mx, my);
+            /* Handle app-specific clicks - returns 1 if handled */
+            int app_handled = handle_app_click(mx, my);
             
             /* Find active window */
             active_win_id = -1;
             for (int i = 0; i < 16; i++) {
                 gui_window_t* win = gui_get_window(i);
-                if (win && win->active && win->visible) {
+                if (win && win->visible && win->active) {
                     active_win_id = i;
                     break;
                 }
+            }
+            
+            /* Only trigger full redraw if window activation changed */
+            if (old_active != active_win_id && !app_handled) {
+                needs_redraw = 1;
             }
             
             /* Check if we started dragging */
@@ -412,19 +425,6 @@ void kernel_main(uint32_t magic, uint32_t* multiboot_info) {
                     needs_redraw = 1;  /* Full redraw for drag start */
                     break;
                 }
-            }
-            
-            /* If just activated a window without dragging, only redraw that window */
-            if (!is_dragging && active_win_id >= 0) {
-                if (old_active != active_win_id) {
-                    needs_redraw = 1;  /* Window activation - need full redraw */
-                } else {
-                    /* Clicked inside active window - partial redraw */
-                    redraw_window(active_win_id);
-                }
-            } else if (!is_dragging) {
-                /* Clicked desktop/icon - full redraw */
-                needs_redraw = 1;
             }
         } else if (mouse_btn && is_dragging && mouse_moved) {
             /* Window is being dragged - full redraw needed */
