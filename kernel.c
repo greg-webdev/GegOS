@@ -86,6 +86,7 @@ static uint8_t get_desktop_color(void) {
 }
 
 /* Draw desktop icons */
+static void draw_desktop_icons(void) __attribute__((unused));
 static void draw_desktop_icons(void) {
     for (int i = 0; desktop_icons[i].label; i++) {
         int x = desktop_icons[i].x;
@@ -224,7 +225,7 @@ static void handle_app_click(int mx, int my) {
     }
 }
 
-/* Draw everything once */
+/* Draw everything with tiled reveal effect */
 static void full_redraw(void) {
     /* Invalidate cursor backup since we're redrawing everything */
     gui_cursor_invalidate();
@@ -232,16 +233,77 @@ static void full_redraw(void) {
     /* Wait for vsync before drawing to reduce tearing */
     vga_vsync();
     
-    /* Draw desktop with current theme color */
-    vga_fillrect(0, 13, SCREEN_WIDTH, SCREEN_HEIGHT - 13, get_desktop_color());
+    /* Tile configuration - split screen into ~500 pieces */
+    #define TILE_COLS 32
+    #define TILE_ROWS 15
+    #define TOTAL_TILES (TILE_COLS * TILE_ROWS)
     
-    /* Draw menubar */
+    int tile_width = SCREEN_WIDTH / TILE_COLS;
+    int tile_height = (SCREEN_HEIGHT - 13) / TILE_ROWS;
+    
+    /* Create tile drawing order array (randomized pattern) */
+    static int tile_order[TILE_COLS * TILE_ROWS];
+    static int order_initialized = 0;
+    
+    if (!order_initialized) {
+        /* Initialize with sequential order then shuffle */
+        for (int i = 0; i < TOTAL_TILES; i++) {
+            tile_order[i] = i;
+        }
+        /* Simple shuffle using XOR pattern for deterministic randomness */
+        for (int i = 0; i < TOTAL_TILES; i++) {
+            int j = (i * 71 + 13) % TOTAL_TILES;
+            int temp = tile_order[i];
+            tile_order[i] = tile_order[j];
+            tile_order[j] = temp;
+        }
+        order_initialized = 1;
+    }
+    
+    /* Draw in tiles with cool reveal effect */
+    for (int t = 0; t < TOTAL_TILES; t++) {
+        int tile_idx = tile_order[t];
+        int col = tile_idx % TILE_COLS;
+        int row = tile_idx / TILE_COLS;
+        
+        int tile_x = col * tile_width;
+        int tile_y = 13 + row * tile_height;
+        
+        /* Draw desktop piece */
+        vga_fillrect(tile_x, tile_y, tile_width + 1, tile_height + 1, get_desktop_color());
+        
+        /* Draw any desktop icons in this tile */
+        for (int i = 0; desktop_icons[i].label; i++) {
+            int ix = desktop_icons[i].x;
+            int iy = desktop_icons[i].y;
+            
+            if (ix < tile_x + tile_width && ix + 48 > tile_x &&
+                iy < tile_y + tile_height && iy + 32 > tile_y) {
+                /* Icon box */
+                vga_fillrect(ix, iy, 48, 32, COLOR_WHITE);
+                vga_rect(ix, iy, 48, 32, COLOR_BLACK);
+                /* Icon symbol */
+                vga_fillrect(ix + 14, iy + 4, 20, 16, COLOR_BLUE);
+                
+                /* Label */
+                int label_len = 0;
+                const char* s = desktop_icons[i].label;
+                while (*s++) label_len++;
+                int lx = ix + (48 - label_len * 8) / 2;
+                vga_putstring(lx, iy + 23, desktop_icons[i].label, COLOR_BLACK, COLOR_WHITE);
+            }
+        }
+        
+        /* Small delay for visual effect (only every few tiles) */
+        if (t % 8 == 0) {
+            for (volatile int d = 0; d < 5000; d++);
+        }
+    }
+    
+    /* Draw menubar/taskbar */
     gui_draw_menubar();
     
-    /* Draw desktop icons */
-    draw_desktop_icons();
-    
-    /* Draw windows (from gui.c but skip cursor) */
+    /* Draw windows */
     gui_draw();
     
     /* Draw app contents inside windows */
