@@ -12,20 +12,24 @@
 
 typedef struct {
     int tiles[GRID_SIZE][GRID_SIZE];
+    int old_tiles[GRID_SIZE][GRID_SIZE];  /* Track previous state */
     int score;
     int moved;
 } game_state_t;
 
 static game_state_t game;
+static int needs_full_draw = 1;
 
 void game_2048_init(void) {
     /* Clear grid */
     for (int i = 0; i < GRID_SIZE; i++) {
         for (int j = 0; j < GRID_SIZE; j++) {
             game.tiles[i][j] = 0;
+            game.old_tiles[i][j] = -1;  /* Force first draw */
         }
     }
     game.score = 0;
+    needs_full_draw = 1;
     
     /* Add two random tiles */
     game.tiles[1][1] = 2;
@@ -194,40 +198,50 @@ uint8_t get_tile_color(int value) {
 }
 
 void game_2048_draw(void) {
-    /* Clear screen */
-    vga_fillrect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, COLOR_BLACK);
-    
-    /* Draw title */
-    vga_putstring(100, 20, "2048 Game", COLOR_YELLOW, COLOR_BLACK);
-    
-    /* Draw score */
-    vga_putstring(20, 50, "Score: ", COLOR_WHITE, COLOR_BLACK);
-    
-    /* Draw grid and tiles */
     int start_x = 40;
     int start_y = 90;
     
-    vga_fillrect(start_x - 5, start_y - 5, GRID_SIZE * TILE_SIZE + 10, GRID_SIZE * TILE_SIZE + 10, COLOR_DARK_GRAY);
+    if (needs_full_draw) {
+        /* Full redraw - only once */
+        vga_fillrect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, COLOR_BLACK);
+        
+        /* Draw title */
+        vga_putstring(100, 20, "2048 Game", COLOR_YELLOW, COLOR_BLACK);
+        
+        /* Draw score label */
+        vga_putstring(20, 50, "Score: ", COLOR_WHITE, COLOR_BLACK);
+        
+        /* Draw grid background */
+        vga_fillrect(start_x - 5, start_y - 5, GRID_SIZE * TILE_SIZE + 10, GRID_SIZE * TILE_SIZE + 10, COLOR_DARK_GRAY);
+        
+        /* Draw instructions */
+        vga_putstring(20, SCREEN_HEIGHT - 50, "Arrows: Move | SPACE: Quit", COLOR_WHITE, COLOR_BLACK);
+        
+        needs_full_draw = 0;
+    }
     
+    /* Only draw tiles that changed */
     for (int i = 0; i < GRID_SIZE; i++) {
         for (int j = 0; j < GRID_SIZE; j++) {
-            int px = start_x + j * TILE_SIZE;
-            int py = start_y + i * TILE_SIZE;
-            
-            if (game.tiles[i][j] == 0) {
-                vga_fillrect(px, py, TILE_SIZE - 2, TILE_SIZE - 2, COLOR_DARK_GRAY);
-            } else {
-                uint8_t color = get_tile_color(game.tiles[i][j]);
-                vga_fillrect(px, py, TILE_SIZE - 2, TILE_SIZE - 2, color);
-                vga_rect(px, py, TILE_SIZE - 2, TILE_SIZE - 2, COLOR_BLACK);
-                /* Draw value (simplified) */
-                vga_putstring(px + 10, py + 12, "OK", COLOR_BLACK, color);
+            if (game.tiles[i][j] != game.old_tiles[i][j]) {
+                int px = start_x + j * TILE_SIZE;
+                int py = start_y + i * TILE_SIZE;
+                
+                if (game.tiles[i][j] == 0) {
+                    vga_fillrect(px, py, TILE_SIZE - 2, TILE_SIZE - 2, COLOR_DARK_GRAY);
+                } else {
+                    uint8_t color = get_tile_color(game.tiles[i][j]);
+                    vga_fillrect(px, py, TILE_SIZE - 2, TILE_SIZE - 2, color);
+                    vga_rect(px, py, TILE_SIZE - 2, TILE_SIZE - 2, COLOR_BLACK);
+                    /* Draw value (simplified) */
+                    vga_putstring(px + 10, py + 12, "OK", COLOR_BLACK, color);
+                }
+                
+                game.old_tiles[i][j] = game.tiles[i][j];
             }
         }
     }
     
-    /* Draw instructions */
-    vga_putstring(20, SCREEN_HEIGHT - 50, "Arrows: Move | SPACE: Quit", COLOR_WHITE, COLOR_BLACK);
     if (game_2048_is_game_over()) {
         vga_putstring(20, SCREEN_HEIGHT - 30, "GAME OVER!", COLOR_RED, COLOR_BLACK);
     }
@@ -244,13 +258,13 @@ void game_2048_run(void) {
             
             if (key == ' ') {
                 return;
-            } else if (key == 0x4b) {  /* Left */
+            } else if (key == (char)130) {  /* Left KEY_LEFT */
                 game_2048_move_left();
-            } else if (key == 0x4d) {  /* Right */
+            } else if (key == (char)131) {  /* Right KEY_RIGHT */
                 game_2048_move_right();
-            } else if (key == 0x48) {  /* Up */
+            } else if (key == (char)128) {  /* Up KEY_UP */
                 game_2048_move_up();
-            } else if (key == 0x50) {  /* Down */
+            } else if (key == (char)129) {  /* Down KEY_DOWN */
                 game_2048_move_down();
             }
         }

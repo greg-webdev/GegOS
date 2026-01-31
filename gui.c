@@ -31,7 +31,7 @@ static int active_window = -1;
 static gui_button_t buttons[MAX_BUTTONS];
 static int num_buttons = 0;
 
-/* Cursor state - XOR based, no backup needed */
+/* Cursor state - simple overwrite, no backup needed for games */
 static int cursor_drawn = 0;
 static int cursor_last_x = -1, cursor_last_y = -1;
 
@@ -192,36 +192,47 @@ void gui_set_active_window(int window_id) {
     active_window = window_id;
 }
 
-/* XOR a pixel - toggle between white and current color */
-static void xor_pixel(int x, int y) {
-    if (x < 0 || x >= SCREEN_WIDTH || y < 0 || y >= SCREEN_HEIGHT) return;
-    uint8_t c = vga_getpixel(x, y);
-    vga_putpixel(x, y, c ^ 0x0F);  /* XOR with white */
+/* Erase cursor by drawing desktop color over it */
+static void erase_cursor_area(int x, int y) {
+    /* Just fill with desktop color - simple and fast */
+    vga_fillrect(x, y, 8, 12, GUI_COLOR_DESKTOP);
 }
 
-/* Draw XOR cursor at position */
-static void draw_xor_cursor(int x, int y) {
-    /* Simple arrow shape using XOR */
-    xor_pixel(x, y);
-    xor_pixel(x, y+1); xor_pixel(x+1, y+1);
-    xor_pixel(x, y+2); xor_pixel(x+1, y+2); xor_pixel(x+2, y+2);
-    xor_pixel(x, y+3); xor_pixel(x+1, y+3); xor_pixel(x+2, y+3); xor_pixel(x+3, y+3);
-    xor_pixel(x, y+4); xor_pixel(x+1, y+4); xor_pixel(x+2, y+4); xor_pixel(x+3, y+4); xor_pixel(x+4, y+4);
-    xor_pixel(x, y+5); xor_pixel(x+1, y+5); xor_pixel(x+2, y+5); xor_pixel(x+3, y+5); xor_pixel(x+4, y+5); xor_pixel(x+5, y+5);
-    xor_pixel(x, y+6); xor_pixel(x+1, y+6); xor_pixel(x+2, y+6); xor_pixel(x+3, y+6);
-    xor_pixel(x, y+7); xor_pixel(x+1, y+7); xor_pixel(x+3, y+7); xor_pixel(x+4, y+7);
-    xor_pixel(x, y+8); xor_pixel(x+4, y+8); xor_pixel(x+5, y+8);
-    xor_pixel(x+5, y+9); xor_pixel(x+6, y+9);
+/* Draw solid cursor at position - white with black outline */
+static void draw_solid_cursor(int x, int y) {
+    /* Black outline */
+    vga_putpixel(x+1, y, COLOR_BLACK);
+    vga_putpixel(x+2, y+1, COLOR_BLACK);
+    vga_putpixel(x+3, y+2, COLOR_BLACK);
+    vga_putpixel(x+4, y+3, COLOR_BLACK);
+    vga_putpixel(x+5, y+4, COLOR_BLACK);
+    vga_putpixel(x+6, y+5, COLOR_BLACK);
+    vga_putpixel(x+4, y+6, COLOR_BLACK);
+    vga_putpixel(x+5, y+7, COLOR_BLACK);
+    vga_putpixel(x+6, y+8, COLOR_BLACK);
+    vga_putpixel(x+7, y+9, COLOR_BLACK);
+    
+    /* White fill */
+    vga_putpixel(x, y, COLOR_WHITE);
+    vga_putpixel(x, y+1, COLOR_WHITE); vga_putpixel(x+1, y+1, COLOR_WHITE);
+    vga_putpixel(x, y+2, COLOR_WHITE); vga_putpixel(x+1, y+2, COLOR_WHITE); vga_putpixel(x+2, y+2, COLOR_WHITE);
+    vga_putpixel(x, y+3, COLOR_WHITE); vga_putpixel(x+1, y+3, COLOR_WHITE); vga_putpixel(x+2, y+3, COLOR_WHITE); vga_putpixel(x+3, y+3, COLOR_WHITE);
+    vga_putpixel(x, y+4, COLOR_WHITE); vga_putpixel(x+1, y+4, COLOR_WHITE); vga_putpixel(x+2, y+4, COLOR_WHITE); vga_putpixel(x+3, y+4, COLOR_WHITE); vga_putpixel(x+4, y+4, COLOR_WHITE);
+    vga_putpixel(x, y+5, COLOR_WHITE); vga_putpixel(x+1, y+5, COLOR_WHITE); vga_putpixel(x+2, y+5, COLOR_WHITE); vga_putpixel(x+3, y+5, COLOR_WHITE); vga_putpixel(x+4, y+5, COLOR_WHITE); vga_putpixel(x+5, y+5, COLOR_WHITE);
+    vga_putpixel(x, y+6, COLOR_WHITE); vga_putpixel(x+1, y+6, COLOR_WHITE); vga_putpixel(x+2, y+6, COLOR_WHITE); vga_putpixel(x+3, y+6, COLOR_WHITE);
+    vga_putpixel(x, y+7, COLOR_WHITE); vga_putpixel(x+1, y+7, COLOR_WHITE); vga_putpixel(x+3, y+7, COLOR_WHITE); vga_putpixel(x+4, y+7, COLOR_WHITE);
+    vga_putpixel(x, y+8, COLOR_WHITE); vga_putpixel(x+4, y+8, COLOR_WHITE); vga_putpixel(x+5, y+8, COLOR_WHITE);
+    vga_putpixel(x+5, y+9, COLOR_WHITE); vga_putpixel(x+6, y+9, COLOR_WHITE);
 }
 
-/* Erase cursor by XORing again at same position */
+/* Erase cursor by restoring saved background */
 void gui_erase_cursor(void) {
     if (!cursor_drawn || cursor_last_x < 0 || cursor_last_y < 0) return;
-    draw_xor_cursor(cursor_last_x, cursor_last_y);
+    erase_cursor_area(cursor_last_x, cursor_last_y);
     cursor_drawn = 0;
 }
 
-/* Draw mouse cursor using XOR */
+/* Draw mouse cursor with background save/restore */
 void gui_draw_cursor(int x, int y) {
     /* Erase old cursor first */
     gui_erase_cursor();
@@ -232,8 +243,8 @@ void gui_draw_cursor(int x, int y) {
     if (x >= SCREEN_WIDTH - 8) x = SCREEN_WIDTH - 9;
     if (y >= SCREEN_HEIGHT - 12) y = SCREEN_HEIGHT - 13;
     
-    /* Draw new XOR cursor */
-    draw_xor_cursor(x, y);
+    /* Draw solid cursor */
+    draw_solid_cursor(x, y);
     cursor_drawn = 1;
     cursor_last_x = x;
     cursor_last_y = y;

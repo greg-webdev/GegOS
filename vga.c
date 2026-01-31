@@ -266,10 +266,12 @@ uint8_t vga_getpixel(int x, int y) {
     int offset = y * BYTES_PER_LINE + x / 8;
     uint8_t mask = 0x80 >> (x & 7);
     uint8_t color = 0;
+    volatile uint8_t byte_val;
     
     for (int plane = 0; plane < 4; plane++) {
         set_read_plane(plane);
-        if (VGA_MEMORY[offset] & mask) {
+        byte_val = VGA_MEMORY[offset];  /* Read after setting plane */
+        if (byte_val & mask) {
             color |= (1 << plane);
         }
     }
