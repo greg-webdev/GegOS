@@ -154,6 +154,9 @@ static void draw_app_contents(void) {
 static void handle_app_keyboard(char key, int mx, int my) {
     gui_window_t* win;
     
+    /* Invalidate cursor before any drawing */
+    gui_cursor_invalidate();
+    
     win = gui_get_window(get_browser_win());
     if (win && win->visible && win->active) {
         browser_handle_key(key);
@@ -198,6 +201,9 @@ static void handle_app_keyboard(char key, int mx, int my) {
 /* Handle mouse click for active app */
 static int handle_app_click(int mx, int my) {
     gui_window_t* win;
+    
+    /* Invalidate cursor before any drawing */
+    gui_cursor_invalidate();
     
     /* Save cursor position before redrawing */
     int save_mx = mx;

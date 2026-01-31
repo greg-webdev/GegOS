@@ -8,7 +8,7 @@
 
 #define MAX_CMD_LEN 64
 #define MAX_HISTORY 10
-#define MAX_OUTPUT_LINES 20
+#define MAX_OUTPUT_LINES 100
 
 static char cmd_buffer[MAX_CMD_LEN];
 static int cmd_pos = 0;
@@ -16,7 +16,7 @@ static int last_cmd_pos = -1;  /* Track last cursor position */
 static char output_lines[MAX_OUTPUT_LINES][MAX_CMD_LEN];
 static int output_count = 0;
 static int last_output_count = -1;  /* Track last output count */
-static int scroll_offset = 0;
+static int scroll_offset = 0;  /* Lines scrolled up from bottom */
 
 /* String utilities */
 static int str_len(const char* str) {
@@ -223,6 +223,7 @@ void terminal_handle_key(char c) {
         exec_command(cmd_buffer);
         cmd_pos = 0;
         cmd_buffer[0] = 0;
+        scroll_offset = 0;  /* Reset scroll on new command */
     } else if (c == '\b') {
         /* Backspace */
         if (cmd_pos > 0) {
@@ -239,14 +240,33 @@ void terminal_handle_key(char c) {
     }
 }
 
+void terminal_scroll_up(void) {
+    scroll_offset += 3;  /* Scroll up 3 lines */
+}
+
+void terminal_scroll_down(void) {
+    scroll_offset -= 3;  /* Scroll down 3 lines */
+    if (scroll_offset < 0) scroll_offset = 0;
+}
+
 void terminal_draw(int x, int y, int width, int height) {
     int line_height = 12;
     int start_y = y + 5;
     int max_lines = (height - 30) / line_height;
-    int start_line = (output_count > max_lines) ? (output_count - max_lines) : 0;
     
-    /* Only clear/redraw if output changed */
-    if (last_output_count != output_count) {
+    /* Calculate visible range with scroll offset */
+    int end_line = output_count - scroll_offset;
+    int start_line = (end_line > max_lines) ? (end_line - max_lines) : 0;
+    
+    /* Clamp scroll offset */
+    if (scroll_offset < 0) scroll_offset = 0;
+    if (scroll_offset > output_count - max_lines && output_count > max_lines) {
+        scroll_offset = output_count - max_lines;
+    }
+    
+    /* Force redraw if scroll changed or output changed */
+    static int last_scroll_offset = -1;
+    if (last_output_count != output_count || last_scroll_offset != scroll_offset) {
         /* Gray background */
         vga_fillrect(x, y, width, height, COLOR_LIGHT_GRAY);
         
@@ -264,29 +284,38 @@ void terminal_draw(int x, int y, int width, int height) {
         vga_vline(term_x + term_w - 1, term_y, term_h, COLOR_WHITE);
         
         /* Draw output lines */
-        for (int i = start_line; i < output_count; i++) {
+        for (int i = start_line; i < end_line && i < output_count; i++) {
             int line_y = term_y + 5 + (i - start_line) * line_height;
             vga_putstring(term_x + 5, line_y, output_lines[i], COLOR_WHITE, COLOR_BLACK);
         }
         last_output_count = output_count;
+        last_scroll_offset = scroll_offset;
     }
     
-    /* Draw prompt line */
-    int prompt_y = start_y + (output_count - start_line) * line_height;
-    if (prompt_y < y + height - 15) {
-        /* Only redraw prompt line if cursor position changed */
-        if (last_cmd_pos != cmd_pos) {
-            /* Clear only the prompt line */
-            vga_fillrect(x, prompt_y, width, line_height, COLOR_BLACK);
-            
-            vga_putstring(x + 5, prompt_y, "$ ", COLOR_LIGHT_GREEN, COLOR_BLACK);
-            vga_putstring(x + 20, prompt_y, cmd_buffer, COLOR_WHITE, COLOR_BLACK);
-            
-            /* Cursor */
-            int cursor_x = x + 20 + (cmd_pos * 8);
-            vga_fillrect(cursor_x, prompt_y, 8, 10, COLOR_WHITE);
-            
-            last_cmd_pos = cmd_pos;
+    /* Draw prompt line only if at bottom */
+    int term_x = x + 3;
+    int term_y = y + 3;
+    int term_h = height - 6;
+    
+    if (scroll_offset == 0) {
+        int visible_lines = (end_line - start_line);
+        int prompt_y = term_y + 5 + visible_lines * line_height;
+        
+        if (prompt_y < y + height - 15) {
+            /* Only redraw prompt line if cursor position changed */
+            if (last_cmd_pos != cmd_pos) {
+                /* Clear only the prompt line */
+                vga_fillrect(term_x, prompt_y, width - 6, line_height, COLOR_BLACK);
+                
+                vga_putstring(term_x + 5, prompt_y, "$ ", COLOR_LIGHT_GREEN, COLOR_BLACK);
+                vga_putstring(term_x + 20, prompt_y, cmd_buffer, COLOR_WHITE, COLOR_BLACK);
+                
+                /* Cursor */
+                int cursor_x = term_x + 20 + (cmd_pos * 8);
+                vga_fillrect(cursor_x, prompt_y, 8, 10, COLOR_WHITE);
+                
+                last_cmd_pos = cmd_pos;
+            }
         }
     }
 }
