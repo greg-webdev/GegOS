@@ -151,41 +151,46 @@ static void draw_app_contents(void) {
 }
 
 /* Handle keyboard for active app */
-static void handle_app_keyboard(char key) {
+static void handle_app_keyboard(char key, int mx, int my) {
     gui_window_t* win;
     
     win = gui_get_window(get_browser_win());
     if (win && win->visible && win->active) {
         browser_handle_key(key);
-        needs_redraw = 1;
+        browser_draw_content(win);
+        gui_draw_cursor(mx, my);
         return;
     }
     
     win = gui_get_window(get_files_win());
     if (win && win->visible && win->active) {
         files_handle_key(key);
-        needs_redraw = 1;
+        files_draw_content(win);
+        gui_draw_cursor(mx, my);
         return;
     }
     
     win = gui_get_window(get_notepad_win());
     if (win && win->visible && win->active) {
         notepad_handle_key(key);
-        needs_redraw = 1;
+        notepad_draw_content(win);
+        gui_draw_cursor(mx, my);
         return;
     }
     
     win = gui_get_window(get_terminal_win());
     if (win && win->visible && win->active) {
         terminal_key_handler(key);
-        needs_redraw = 1;
+        terminal_draw_content(win);
+        gui_draw_cursor(mx, my);
         return;
     }
     
     win = gui_get_window(get_calc_win());
     if (win && win->visible && win->active) {
         calc_handle_key(key);
-        needs_redraw = 1;
+        calc_draw_content(win);
+        gui_draw_cursor(mx, my);
         return;
     }
 }
@@ -233,7 +238,7 @@ static int handle_app_click(int mx, int my) {
     return 0;
 }
 
-/* Draw everything with tiled reveal effect */
+/* Draw everything - simple and fast */
 static void full_redraw(void) {
     /* Invalidate cursor backup since we're redrawing everything */
     gui_cursor_invalidate();
@@ -241,62 +246,29 @@ static void full_redraw(void) {
     /* Wait for vsync before drawing to reduce tearing */
     vga_vsync();
     
-    /* Tile configuration - split screen into ~500 pieces */
-    #define TILE_COLS 32
-    #define TILE_ROWS 15
-    #define TOTAL_TILES (TILE_COLS * TILE_ROWS)
+    /* Draw desktop background */
+    vga_fillrect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT - 28, get_desktop_color());
     
-    int tile_width = SCREEN_WIDTH / TILE_COLS;
-    int tile_height = (SCREEN_HEIGHT - 13) / TILE_ROWS;
-    
-    /* Create tile drawing order array (layer by layer - top to bottom) */
-    static int tile_order[TILE_COLS * TILE_ROWS];
-    static int order_initialized = 0;
-    
-    if (!order_initialized) {
-        /* Sequential order - layer by layer (row by row) */
-        for (int i = 0; i < TOTAL_TILES; i++) {
-            tile_order[i] = i;
-        }
-        order_initialized = 1;
+    /* Draw desktop icons */
+    for (int i = 0; desktop_icons[i].label; i++) {
+        int ix = desktop_icons[i].x;
+        int iy = desktop_icons[i].y;
+        
+        /* Icon box */
+        vga_fillrect(ix, iy, 48, 32, COLOR_WHITE);
+        vga_rect(ix, iy, 48, 32, COLOR_BLACK);
+        /* Icon symbol */
+        vga_fillrect(ix + 14, iy + 4, 20, 16, COLOR_BLUE);
+        
+        /* Label */
+        int label_len = 0;
+        const char* s = desktop_icons[i].label;
+        while (*s++) label_len++;
+        int lx = ix + (48 - label_len * 8) / 2;
+        vga_putstring(lx, iy + 23, desktop_icons[i].label, COLOR_BLACK, COLOR_WHITE);
     }
     
-    /* Draw in tiles - all simultaneously (no delays) */
-    for (int t = 0; t < TOTAL_TILES; t++) {
-        int tile_idx = tile_order[t];
-        int col = tile_idx % TILE_COLS;
-        int row = tile_idx / TILE_COLS;
-        
-        int tile_x = col * tile_width;
-        int tile_y = 13 + row * tile_height;
-        
-        /* Draw desktop piece */
-        vga_fillrect(tile_x, tile_y, tile_width + 1, tile_height + 1, get_desktop_color());
-        
-        /* Draw any desktop icons in this tile */
-        for (int i = 0; desktop_icons[i].label; i++) {
-            int ix = desktop_icons[i].x;
-            int iy = desktop_icons[i].y;
-            
-            if (ix < tile_x + tile_width && ix + 48 > tile_x &&
-                iy < tile_y + tile_height && iy + 32 > tile_y) {
-                /* Icon box */
-                vga_fillrect(ix, iy, 48, 32, COLOR_WHITE);
-                vga_rect(ix, iy, 48, 32, COLOR_BLACK);
-                /* Icon symbol */
-                vga_fillrect(ix + 14, iy + 4, 20, 16, COLOR_BLUE);
-                
-                /* Label */
-                int label_len = 0;
-                const char* s = desktop_icons[i].label;
-                while (*s++) label_len++;
-                int lx = ix + (48 - label_len * 8) / 2;
-                vga_putstring(lx, iy + 23, desktop_icons[i].label, COLOR_BLACK, COLOR_WHITE);
-            }
-        }
-    }
-    
-    /* Draw menubar/taskbar */
+    /* Draw taskbar */
     gui_draw_menubar();
     
     /* Draw windows */
@@ -307,6 +279,7 @@ static void full_redraw(void) {
 }
 
 /* Redraw only a specific window and its content */
+static void redraw_window(int win_id) __attribute__((unused));
 static void redraw_window(int win_id) {
     gui_cursor_invalidate();
     
@@ -427,12 +400,14 @@ void kernel_main(uint32_t magic, uint32_t* multiboot_info) {
                 }
             }
         } else if (mouse_btn && is_dragging && mouse_moved) {
-            /* Window is being dragged - full redraw needed */
+            /* Window is being dragged - update position but defer redraw */
             gui_update();
             needs_redraw = 1;
-        } else if (mouse_released && is_dragging) {
-            is_dragging = 0;
-            needs_redraw = 1;  /* Final redraw after drag */
+        } else if (mouse_released) {
+            if (is_dragging) {
+                is_dragging = 0;
+                needs_redraw = 1;  /* Final redraw after drag */
+            }
         }
         
         last_mouse_btn = mouse_btn;
@@ -441,11 +416,7 @@ void kernel_main(uint32_t magic, uint32_t* multiboot_info) {
         if (keyboard_haskey()) {
             char key = keyboard_getchar();
             if (key != 0) {
-                handle_app_keyboard(key);
-                /* Keyboard input - only redraw active window */
-                if (active_win_id >= 0) {
-                    redraw_window(active_win_id);
-                }
+                handle_app_keyboard(key, mx, my);
             }
         }
         
