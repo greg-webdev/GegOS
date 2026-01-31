@@ -64,7 +64,7 @@ static void click_settings(void) { app_settings(); needs_redraw = 1; }
 static void click_about(void) { app_about(); needs_redraw = 1; }
 
 static desktop_icon_t desktop_icons[] = {
-    {20, 40, "Browser", click_browser},
+    {20, 40, "Potato", click_browser},
     {20, 100, "Files", click_files},
     {20, 160, "Notepad", click_notepad},
     {20, 220, "Terminal", click_terminal},
@@ -246,6 +246,26 @@ static void full_redraw(void) {
     
     /* Draw app contents inside windows */
     draw_app_contents();
+}
+
+/* Redraw only a specific window and its content */
+static void redraw_window(int win_id) {
+    gui_cursor_invalidate();
+    
+    gui_window_t* win = gui_get_window(win_id);
+    if (!win || !win->visible) return;
+    
+    /* Draw this window */
+    gui_draw_window(win);
+    
+    /* Draw its content */
+    if (win_id == get_browser_win()) browser_draw_content(win);
+    else if (win_id == get_files_win()) files_draw_content(win);
+    else if (win_id == get_notepad_win()) notepad_draw_content(win);
+    else if (win_id == get_terminal_win()) terminal_draw_content(win);
+    else if (win_id == get_calc_win()) calc_draw_content(win);
+    else if (win_id == get_settings_win()) settings_draw_content(win);
+    else if (win_id == get_about_win()) about_draw_content(win);
 }
 
 /* Kernel main entry point */

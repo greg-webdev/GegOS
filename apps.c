@@ -247,40 +247,66 @@ int app_run(const char* name) {
     return 0;
 }
 
-/* ==================== BROWSER APP ==================== */
+/* ==================== BROWSER APP (Potato) ==================== */
 
 static int browser_win = -1;
+static char browser_url[64] = "potato://home";
+static int browser_history_pos = 0;
 
 void app_browser(void) {
     browser_page = 0;
-    browser_win = gui_create_window(120, 50, 400, 300, "GegBrowse");
+    browser_win = gui_create_window(120, 50, 400, 300, "Potato Browser");
     gui_set_active_window(browser_win);
 }
 
 void browser_draw_content(gui_window_t* win) {
     if (!win || !win->visible) return;
     
-    int x = win->x + 5;
-    int y = win->y + 20;
+    int x = win->x + 3;
+    int y = win->y + 17;
     
     /* Clear content area */
-    vga_fillrect(win->x + 3, win->y + 16, win->width - 6, win->height - 19, COLOR_WHITE);
+    vga_fillrect(x, y, win->width - 6, win->height - 20, COLOR_WHITE);
+    
+    /* Tab bar */
+    vga_fillrect(x, y, 60, 14, COLOR_LIGHT_GRAY);
+    vga_rect(x, y, 60, 14, COLOR_BLACK);
+    vga_putstring(x + 4, y + 3, "+ Tab", COLOR_BLACK, COLOR_LIGHT_GRAY);
+    
+    y += 16;
+    
+    /* Navigation buttons */
+    int bx = x;
+    vga_fillrect(bx, y, 20, 14, COLOR_LIGHT_GRAY);
+    vga_rect(bx, y, 20, 14, COLOR_BLACK);
+    vga_putstring(bx + 4, y + 3, "<", COLOR_BLACK, COLOR_LIGHT_GRAY);
+    
+    bx += 22;
+    vga_fillrect(bx, y, 20, 14, COLOR_LIGHT_GRAY);
+    vga_rect(bx, y, 20, 14, COLOR_BLACK);
+    vga_putstring(bx + 4, y + 3, ">", COLOR_BLACK, COLOR_LIGHT_GRAY);
+    
+    bx += 22;
+    vga_fillrect(bx, y, 20, 14, COLOR_LIGHT_GRAY);
+    vga_rect(bx, y, 20, 14, COLOR_BLACK);
+    vga_putstring(bx + 4, y + 3, "R", COLOR_BLACK, COLOR_LIGHT_GRAY);
     
     /* URL bar */
-    vga_fillrect(x, y, win->width - 12, 12, COLOR_LIGHT_GRAY);
-    vga_rect(x, y, win->width - 12, 12, COLOR_BLACK);
+    bx += 24;
+    vga_fillrect(bx, y, win->width - (bx - x) - 10, 14, COLOR_WHITE);
+    vga_rect(bx, y, win->width - (bx - x) - 10, 14, COLOR_BLACK);
     
-    const char* urls[] = {"gegos://home", "gegos://about", "gegos://help", "gegos://fun"};
-    vga_putstring(x + 2, y + 2, urls[browser_page], COLOR_BLACK, COLOR_LIGHT_GRAY);
+    const char* urls[] = {"potato://home", "potato://search", "potato://news", "potato://games"};
+    vga_putstring(bx + 4, y + 3, urls[browser_page], COLOR_DARK_GRAY, COLOR_WHITE);
     
     /* Page content */
-    y += 16;
+    y += 18;
     const char* content = browser_pages[browser_page];
-    int cx = x, cy = y;
+    int cx = x + 4, cy = y;
     
     while (*content) {
         if (*content == '\n') {
-            cx = x;
+            cx = x + 4;
             cy += 10;
         } else {
             if (cx < win->x + win->width - 10) {
@@ -290,6 +316,11 @@ void browser_draw_content(gui_window_t* win) {
         }
         content++;
     }
+    
+    /* Status bar */
+    int status_y = win->y + win->height - 14;
+    vga_fillrect(win->x + 3, status_y, win->width - 6, 12, COLOR_LIGHT_GRAY);
+    vga_putstring(win->x + 8, status_y + 2, "Ready", COLOR_BLACK, COLOR_LIGHT_GRAY);
 }
 
 void browser_handle_key(char key) {
