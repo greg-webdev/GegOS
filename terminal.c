@@ -129,7 +129,7 @@ static void exec_dir(void) {
 }
 
 static void exec_ver(void) {
-    add_output("GegOS [Version 1.0.0.32]");
+    add_output("GegOS [Version 1.0]");
     add_output("(c) 2026 GegOS Corporation.");
 }
 

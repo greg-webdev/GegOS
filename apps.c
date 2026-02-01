@@ -74,7 +74,7 @@ static int num_apps = 7;
 
 /* Settings state */
 static int settings_win = -1;
-static int settings_resolution = 0;  /* 0=320x200, 1=640x480(unavailable) */
+static int settings_resolution = 0;  /* 0=640x480, 1=320x200 */
 static int settings_mouse_speed = 1; /* 0=slow, 1=normal, 2=fast */
 static int settings_theme = 0;       /* 0=cyan, 1=gray, 2=blue */
 
@@ -89,7 +89,7 @@ static const char* browser_pages[] = {
     "[3] Fun Page",
     
     "About GegOS\n\n"
-    "GegOS v0.3\n"
+    "GegOS v1.0\n"
     "A hobby operating\n"
     "system with GUI.\n\n"
     "[0] Back to Home",
@@ -734,7 +734,7 @@ void about_draw_content(gui_window_t* win) {
     vga_putstring(x + 4, y + 12, "Geg", COLOR_WHITE, COLOR_BLUE);
     
     /* Info */
-    vga_putstring(x + 40, y, "GegOS v0.3", COLOR_BLACK, COLOR_WHITE);
+    vga_putstring(x + 40, y, "GegOS v1.0", COLOR_BLACK, COLOR_WHITE);
     vga_putstring(x + 40, y + 12, "Hobby OS", COLOR_DARK_GRAY, COLOR_WHITE);
     vga_putstring(x + 40, y + 24, "2026", COLOR_DARK_GRAY, COLOR_WHITE);
     
@@ -762,7 +762,7 @@ void settings_draw_content(gui_window_t* win) {
     vga_putstring(x, y, "Resolution:", COLOR_BLACK, COLOR_WHITE);
     
     /* Resolution options */
-    const char* res_opts[] = {"320x200", "640x480"};
+    const char* res_opts[] = {"640x480", "320x200"};
     for (int i = 0; i < 2; i++) {
         int bx = x + 75 + i * 50;
         uint8_t bg = (settings_resolution == i) ? COLOR_BLUE : COLOR_LIGHT_GRAY;
@@ -770,11 +770,6 @@ void settings_draw_content(gui_window_t* win) {
         vga_fillrect(bx, y - 2, 48, 12, bg);
         vga_rect(bx, y - 2, 48, 12, COLOR_BLACK);
         vga_putstring(bx + 2, y, res_opts[i], fg, bg);
-    }
-    
-    /* Note about 640x480 */
-    if (settings_resolution == 1) {
-        vga_putstring(x, y + 14, "(unavailable)", COLOR_RED, COLOR_WHITE);
     }
     
     y += 32;
@@ -824,6 +819,7 @@ void settings_handle_click(gui_window_t* win, int mx, int my) {
         int bx = x + 75 + i * 50;
         if (mx >= bx && mx < bx + 48 && my >= y - 2 && my < y + 10) {
             settings_resolution = i;
+            vga_set_mode(i);  /* Actually apply the resolution change */
             return;
         }
     }

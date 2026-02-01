@@ -81,4 +81,10 @@ void vga_swap(void);
 /* Wait for vertical retrace (smooth animation) */
 void vga_vsync(void);
 
+/* Set VGA mode (0=640x480, 1=320x200) */
+void vga_set_mode(int mode);
+
+/* Get current VGA mode */
+int vga_get_mode(void);
+
 #endif /* VGA_H */

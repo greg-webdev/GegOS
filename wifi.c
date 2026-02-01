@@ -33,7 +33,7 @@ static int password_cursor = 0;
 static char selected_ssid[32] = "";
 
 void app_wifi(void) {
-    wifi_win = gui_create_window(150, 80, 350, 280, "WiFi Manager");
+    wifi_win = gui_create_window(400, 80, 350, 280, "WiFi Manager");
     gui_set_active_window(wifi_win);
     wifi_state = WIFI_STATE_MENU;
     selected_network = 0;

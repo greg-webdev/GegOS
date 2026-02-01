@@ -390,3 +390,39 @@ void vga_vsync(void) {
 void vga_swap(void) {
     vga_vsync();
 }
+
+/* Current VGA mode (0=640x480, 1=320x200) */
+static int current_vga_mode = 0;
+
+/* Set VGA mode */
+void vga_set_mode(int mode) {
+    if (mode == current_vga_mode) return;
+    
+    current_vga_mode = mode;
+    
+    if (mode == 1) {
+        /* Switch to 320x200 16-color mode (Mode 13h) */
+        /* Call BIOS INT 10h, AH=0, AL=0x13 */
+        uint16_t bios_ax = 0x0013;
+        asm volatile (
+            "int $0x10"
+            : "+a" (bios_ax)
+        );
+    } else {
+        /* Switch back to 640x480 16-color mode (Mode 12h) */
+        /* Call BIOS INT 10h, AH=0, AL=0x12 */
+        uint16_t bios_ax = 0x0012;
+        asm volatile (
+            "int $0x10"
+            : "+a" (bios_ax)
+        );
+    }
+    
+    /* Reinitialize VGA memory pointer */
+    vga_init();
+}
+
+/* Get current VGA mode */
+int vga_get_mode(void) {
+    return current_vga_mode;
+}

@@ -1,4 +1,4 @@
-GegOS v0.7 - Complete Feature Set
+GegOS v1.0 - Complete Feature Set
 ==================================
 
 CORE FEATURES COMPLETED:
