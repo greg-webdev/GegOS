@@ -82,7 +82,7 @@ static int settings_theme = 0;       /* 0=cyan, 1=gray, 2=blue */
 static int browser_page = 0;
 static const char* browser_pages[] = {
     "GegOS Home\n\n"
-    "Welcome to GegBrowse!\n\n"
+    "Welcome to Potato!\n\n"
     "Links:\n"
     "[1] About GegOS\n"
     "[2] Help Page\n"
@@ -735,6 +735,7 @@ void about_draw_content(gui_window_t* win) {
     
     /* Info */
     vga_putstring(x + 40, y, "GegOS v1.0", COLOR_BLACK, COLOR_WHITE);
+    vga_putstring(x + 80, y, " v1.0", COLOR_RED, COLOR_WHITE);
     vga_putstring(x + 40, y + 12, "Hobby OS", COLOR_DARK_GRAY, COLOR_WHITE);
     vga_putstring(x + 40, y + 24, "2026", COLOR_DARK_GRAY, COLOR_WHITE);
     

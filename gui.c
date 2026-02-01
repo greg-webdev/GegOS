@@ -268,55 +268,110 @@ void gui_redraw_dirty(void) {
 
 /* Draw desktop */
 void gui_draw_desktop(void) {
-    vga_fillrect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT - 28, GUI_COLOR_DESKTOP);
+    vga_fillrect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT - 32, GUI_COLOR_DESKTOP);
 }
 
-/* Draw menubar/taskbar */
+/* Draw menubar/taskbar - Enhanced Windows-style taskbar */
 void gui_draw_menubar(void) {
-    int taskbar_height = 28;
+    int taskbar_height = 32;  /* Increased height for better appearance */
     int taskbar_y = SCREEN_HEIGHT - taskbar_height;
-    
-    /* Taskbar background */
-    vga_fillrect(0, taskbar_y, SCREEN_WIDTH, taskbar_height, GUI_COLOR_TASKBAR);
-    
-    /* Top border (raised) */
+
+    /* Taskbar background with gradient effect */
+    for (int i = 0; i < taskbar_height; i++) {
+        uint8_t color = GUI_COLOR_TASKBAR;
+        if (i < 2) color = COLOR_WHITE;  /* Top highlight */
+        else if (i > taskbar_height - 3) color = COLOR_DARK_GRAY;  /* Bottom shadow */
+        vga_hline(0, taskbar_y + i, SCREEN_WIDTH, color);
+    }
+
+    /* Top border (raised effect) */
     vga_hline(0, taskbar_y, SCREEN_WIDTH, COLOR_WHITE);
-    vga_hline(0, taskbar_y + 1, SCREEN_WIDTH, COLOR_WHITE);
-    
-    /* Start button (Windows style) */
-    int start_w = 60;
-    int start_h = 22;
-    int start_x = 2;
-    int start_y = taskbar_y + 3;
-    
-    /* Start button 3D raised border */
+    vga_hline(0, taskbar_y + 1, SCREEN_WIDTH, COLOR_LIGHT_GRAY);
+
+    /* Bottom border (sunken effect) */
+    vga_hline(0, taskbar_y + taskbar_height - 1, SCREEN_WIDTH, COLOR_DARK_GRAY);
+    vga_hline(0, taskbar_y + taskbar_height - 2, SCREEN_WIDTH, COLOR_BLACK);
+
+    /* Start button (Windows XP style) */
+    int start_w = 80;  /* Wider for "Start" text */
+    int start_h = 24;
+    int start_x = 4;
+    int start_y = taskbar_y + 4;
+
+    /* Start button with 3D effect */
     vga_fillrect(start_x, start_y, start_w, start_h, GUI_COLOR_BUTTON_BG);
+
+    /* Raised border */
     vga_hline(start_x, start_y, start_w, COLOR_WHITE);
     vga_vline(start_x, start_y, start_h, COLOR_WHITE);
-    vga_hline(start_x, start_y + start_h - 1, start_w, COLOR_BLACK);
-    vga_vline(start_x + start_w - 1, start_y, start_h, COLOR_BLACK);
-    vga_hline(start_x + 1, start_y + start_h - 2, start_w - 2, COLOR_DARK_GRAY);
-    vga_vline(start_x + start_w - 2, start_y + 1, start_h - 2, COLOR_DARK_GRAY);
-    
-    /* Windows logo (simplified colored squares) */
-    vga_fillrect(start_x + 5, start_y + 5, 5, 5, COLOR_RED);
-    vga_fillrect(start_x + 5, start_y + 11, 5, 5, COLOR_BLUE);
-    vga_fillrect(start_x + 11, start_y + 5, 5, 5, COLOR_GREEN);
-    vga_fillrect(start_x + 11, start_y + 11, 5, 5, COLOR_YELLOW);
-    
+    vga_hline(start_x, start_y + start_h - 1, start_w, COLOR_DARK_GRAY);
+    vga_vline(start_x + start_w - 1, start_y, start_h, COLOR_DARK_GRAY);
+
+    /* Windows logo (4 colored squares) */
+    int logo_x = start_x + 6;
+    int logo_y = start_y + 6;
+    vga_fillrect(logo_x, logo_y, 4, 4, COLOR_LIGHT_GREEN);      /* Top-left */
+    vga_fillrect(logo_x + 4, logo_y, 4, 4, COLOR_LIGHT_CYAN);   /* Top-right */
+    vga_fillrect(logo_x, logo_y + 4, 4, 4, COLOR_LIGHT_RED);    /* Bottom-left */
+    vga_fillrect(logo_x + 4, logo_y + 4, 4, 4, COLOR_YELLOW);   /* Bottom-right */
+
     /* Start text */
-    vga_putstring(start_x + 20, start_y + 7, "Start", COLOR_BLACK, GUI_COLOR_BUTTON_BG);
-    
-    /* Clock area (sunken) */
-    int clock_x = SCREEN_WIDTH - 60;
-    vga_fillrect(clock_x, start_y, 56, start_h, GUI_COLOR_TASKBAR);
-    vga_hline(clock_x, start_y, 56, COLOR_DARK_GRAY);
-    vga_vline(clock_x, start_y, start_h, COLOR_DARK_GRAY);
-    vga_hline(clock_x + 1, start_y + 1, 54, COLOR_BLACK);
-    vga_vline(clock_x + 1, start_y + 1, start_h - 2, COLOR_BLACK);
-    vga_hline(clock_x, start_y + start_h - 1, 56, COLOR_WHITE);
-    vga_vline(clock_x + 55, start_y, start_h, COLOR_WHITE);
-    vga_putstring(clock_x + 8, start_y + 7, "12:00", COLOR_BLACK, GUI_COLOR_TASKBAR);
+    vga_putstring(start_x + 20, start_y + 8, "Start", COLOR_BLACK, GUI_COLOR_BUTTON_BG);
+
+    /* Quick launch area - app shortcuts */
+    int quick_x = start_x + start_w + 8;
+    int quick_y = taskbar_y + 6;
+
+    /* Browser shortcut */
+    vga_fillrect(quick_x, quick_y, 24, 20, COLOR_LIGHT_GRAY);
+    vga_rect(quick_x, quick_y, 24, 20, COLOR_BLACK);
+    vga_fillrect(quick_x + 4, quick_y + 4, 16, 12, COLOR_BLUE);
+    vga_putstring(quick_x + 28, quick_y + 6, "Browser", COLOR_BLACK, GUI_COLOR_TASKBAR);
+
+    /* File manager shortcut */
+    int file_x = quick_x + 80;
+    vga_fillrect(file_x, quick_y, 24, 20, COLOR_LIGHT_GRAY);
+    vga_rect(file_x, quick_y, 24, 20, COLOR_BLACK);
+    vga_fillrect(file_x + 4, quick_y + 4, 16, 12, COLOR_GREEN);
+    vga_putstring(file_x + 28, quick_y + 6, "Files", COLOR_BLACK, GUI_COLOR_TASKBAR);
+
+    /* Task area - show running applications */
+    int task_x = file_x + 80;
+
+    /* Sample running app button */
+    if (num_windows > 0) {
+        vga_fillrect(task_x, quick_y, 100, 20, GUI_COLOR_BUTTON_BG);
+        vga_rect(task_x, quick_y, 100, 20, COLOR_BLACK);
+        vga_putstring(task_x + 8, quick_y + 6, "Terminal", COLOR_BLACK, GUI_COLOR_BUTTON_BG);
+    }
+
+    /* System tray area */
+    int tray_x = SCREEN_WIDTH - 120;
+    int tray_y = taskbar_y + 6;
+
+    /* Network icon */
+    vga_fillrect(tray_x, tray_y, 16, 12, COLOR_LIGHT_GRAY);
+    vga_rect(tray_x, tray_y, 16, 12, COLOR_BLACK);
+    vga_fillrect(tray_x + 2, tray_y + 2, 12, 8, COLOR_GREEN);
+
+    /* Volume icon */
+    int vol_x = tray_x + 20;
+    vga_fillrect(vol_x, tray_y, 16, 12, COLOR_LIGHT_GRAY);
+    vga_rect(vol_x, tray_y, 16, 12, COLOR_BLACK);
+    vga_fillrect(vol_x + 2, tray_y + 2, 12, 8, COLOR_BLUE);
+
+    /* Clock (larger and more prominent) */
+    int clock_x = SCREEN_WIDTH - 70;
+    int clock_y = taskbar_y + 4;
+    int clock_w = 64;
+    int clock_h = 24;
+
+    /* Clock background with border */
+    vga_fillrect(clock_x, clock_y, clock_w, clock_h, GUI_COLOR_BUTTON_BG);
+    vga_rect(clock_x, clock_y, clock_w, clock_h, COLOR_BLACK);
+
+    /* Time display */
+    vga_putstring(clock_x + 8, clock_y + 8, "12:34 PM", COLOR_BLACK, GUI_COLOR_BUTTON_BG);
 }
 
 /* Draw window */
@@ -460,8 +515,8 @@ void gui_update(void) {
                 if (win->y < 13) win->y = 13;
                 if (win->x + win->width > SCREEN_WIDTH) 
                     win->x = SCREEN_WIDTH - win->width;
-                if (win->y + win->height > SCREEN_HEIGHT - 28)
-                    win->y = SCREEN_HEIGHT - 28 - win->height;
+                if (win->y + win->height > SCREEN_HEIGHT - 32)
+                    win->y = SCREEN_HEIGHT - 32 - win->height;
             } else {
                 win->dragging = 0;
             }

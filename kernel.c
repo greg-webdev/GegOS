@@ -37,19 +37,21 @@ typedef struct {
     uint16_t reserved;
 } multiboot2_framebuffer_tag_t;
 
-/* Global framebuffer information */
+/* Global framebuffer information - unused in 32-bit kernel */
+/*
 static uint64_t fb_addr = 0;
 static uint32_t fb_pitch = 0;
 static uint32_t fb_width = 0;
 static uint32_t fb_height = 0;
 static uint8_t fb_bpp = 0;
+*/
 
-/* Parse Multiboot 2 information structure */
+/* Parse Multiboot 2 information structure - commented out for 32-bit kernel */
+/*
 static void parse_multiboot2_info(uint32_t* mb_info) {
     multiboot2_info_header_t* header = (multiboot2_info_header_t*)mb_info;
     uint32_t total_size = header->total_size;
     
-    /* Start parsing tags after the header */
     uint32_t offset = 8; // Skip header
     while (offset < total_size) {
         multiboot2_tag_header_t* tag = (multiboot2_tag_header_t*)((uint8_t*)mb_info + offset);
@@ -65,10 +67,10 @@ static void parse_multiboot2_info(uint32_t* mb_info) {
             break;
         }
         
-        /* Move to next tag (aligned to 8 bytes) */
         offset += (tag->size + 7) & ~7;
     }
 }
+*/
 
 /* External app window getters */
 extern int get_browser_win(void);
@@ -114,6 +116,9 @@ extern int get_settings_mouse_speed(void);
 /* Global redraw flag */
 static int needs_redraw = 1;
 
+/* Taskbar height constant */
+#define TASKBAR_HEIGHT 32
+
 /* Start menu state */
 static int start_menu_open = 0;
 
@@ -135,7 +140,7 @@ static desktop_icon_t desktop_icons[] = {
     {20, 100, "Files", click_files},
     {20, 160, "Notepad", click_notepad},
     {20, 220, "Terminal", click_terminal},
-    {20, 280, "Calc", click_calc},
+    {20, TASKBAR_HEIGHT, "Calc", click_calc},
     {20, 340, "Settings", click_settings},
     {20, 400, "About", click_about},
     {0, 0, 0, 0}
@@ -180,7 +185,7 @@ static void draw_desktop_icons(void) {
 
 /* Handle start menu button click and menu item clicks */
 static int handle_start_menu_click(int mx, int my) {
-    int taskbar_y = SCREEN_HEIGHT - 28;
+    int taskbar_y = SCREEN_HEIGHT - TASKBAR_HEIGHT;
     int start_x = 2;
     int start_y = taskbar_y + 3;
     int start_w = 60;
@@ -412,7 +417,7 @@ static void full_redraw(void) {
 
     /* Only redraw desktop if needed - for now we redraw everything */
     /* TODO: Implement dirty rectangles for partial redraws */
-    vga_fillrect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT - 28, get_desktop_color());
+    vga_fillrect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT - TASKBAR_HEIGHT, get_desktop_color());
 
     /* Draw desktop icons */
     for (int i = 0; desktop_icons[i].label; i++) {
@@ -438,7 +443,7 @@ static void full_redraw(void) {
 
     /* Draw start menu if open */
     if (start_menu_open) {
-        int taskbar_y = SCREEN_HEIGHT - 28;
+        int taskbar_y = SCREEN_HEIGHT - TASKBAR_HEIGHT;
         int menu_x = 2;
         int menu_y = taskbar_y - 120;
         int menu_w = 140;
@@ -475,7 +480,7 @@ static void full_redraw(void) {
 static void redraw_start_menu_area(void) {
     gui_erase_cursor();
     
-    int taskbar_y = SCREEN_HEIGHT - 28;
+    int taskbar_y = SCREEN_HEIGHT - TASKBAR_HEIGHT;
     int menu_x = 2;
     int menu_y = taskbar_y - 120;
     int menu_w = 140;
@@ -571,7 +576,7 @@ void redraw_cursor_area_kernel(int x, int y) {
     }
     
     /* Redraw taskbar if it intersects */
-    int taskbar_y = SCREEN_HEIGHT - 28;
+    int taskbar_y = SCREEN_HEIGHT - TASKBAR_HEIGHT;
     if (top + height > taskbar_y) {
         /* Redraw taskbar in the intersecting area */
         int tb_left = left;
@@ -579,7 +584,7 @@ void redraw_cursor_area_kernel(int x, int y) {
         if (tb_left < 0) tb_left = 0;
         if (tb_left + tb_width > SCREEN_WIDTH) tb_width = SCREEN_WIDTH - tb_left;
         
-        vga_fillrect(tb_left, taskbar_y, tb_width, 28, COLOR_LIGHT_GRAY);
+        vga_fillrect(tb_left, taskbar_y, tb_width, TASKBAR_HEIGHT, COLOR_LIGHT_GRAY);
         
         /* Redraw taskbar elements if they intersect */
         if (tb_left < 60) {  /* Start button */
@@ -622,7 +627,7 @@ void redraw_cursor_area_kernel(int x, int y) {
     
     /* Redraw start menu if open and intersects */
     if (start_menu_open) {
-        int taskbar_y = SCREEN_HEIGHT - 28;
+        int taskbar_y = SCREEN_HEIGHT - TASKBAR_HEIGHT;
         int menu_x = 2;
         int menu_y = taskbar_y - 120;
         int menu_w = 140;
@@ -643,7 +648,8 @@ void redraw_cursor_area_kernel(int x, int y) {
         }
     }
     
-    /* Redraw windows that intersect this area */
+    /* Redraw windows that intersect this area - DISABLED to prevent cursor flicker */
+    /* Windows should remain drawn when cursor moves over them */
     for (int i = 0; i < 16; i++) {  /* MAX_WINDOWS */
         gui_window_t* win = gui_get_window(i);
         if (!win || !win->visible) continue;
@@ -799,17 +805,8 @@ static void launch_game(int game_id) {
 
 /* Kernel main entry point */
 void kernel_main(uint32_t magic, uint32_t* multiboot_info) {
-    /* Check for Multiboot 2 magic */
-    if (magic == 0x36d76289) {
-        /* Parse Multiboot 2 information */
-        parse_multiboot2_info(multiboot_info);
-    }
-    
-    /* Debug: Check if framebuffer was detected */
-    if (fb_addr != 0) {
-        /* For now, just continue with VGA text mode */
-        /* TODO: Implement framebuffer rendering */
-    }
+    (void)magic;
+    (void)multiboot_info;
     
     /* Initialize subsystems */
     vga_init();
@@ -961,7 +958,7 @@ void kernel_main(uint32_t magic, uint32_t* multiboot_info) {
             vga_vsync();
             
             /* Desktop */
-            vga_fillrect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT - 28, get_desktop_color());
+            vga_fillrect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT - TASKBAR_HEIGHT, get_desktop_color());
             
             /* Desktop icons */
             for (int i = 0; desktop_icons[i].label; i++) {
@@ -982,7 +979,7 @@ void kernel_main(uint32_t magic, uint32_t* multiboot_info) {
             
             /* Start menu if open */
             if (start_menu_open) {
-                int taskbar_y = SCREEN_HEIGHT - 28;
+                int taskbar_y = SCREEN_HEIGHT - TASKBAR_HEIGHT;
                 int menu_x = 2;
                 int menu_y = taskbar_y - 120;
                 int menu_w = 140;
