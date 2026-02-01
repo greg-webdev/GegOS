@@ -1,12 +1,21 @@
 /*
- * gui.c - Simple GUI System for GegOS
- * Optimized with dirty rectangle system and proper cursor handling
+ * gui.c - GUI System 2.0 for GegOS
+ * Complete rewrite with proper cursor handling
+ * 
+ * Key changes in 2.0:
+ * - Cursor drawn LAST after all rendering
+ * - No save/restore needed - full screen redraws each frame
+ * - Simpler, more reliable rendering pipeline
  */
 
 #include "gui.h"
 #include "vga.h"
 #include "mouse.h"
 #include "keyboard.h"
+#include "io.h"
+
+/* External declarations */
+extern void redraw_cursor_area_kernel(int x, int y);
 
 /* GUI Colors (Windows 95/XP classic theme) */
 #define GUI_COLOR_DESKTOP     COLOR_CYAN          /* Teal desktop */
@@ -20,7 +29,6 @@
 #define GUI_COLOR_BUTTON_HOVER COLOR_LIGHT_CYAN
 #define GUI_COLOR_BUTTON_PRESS COLOR_DARK_GRAY
 #define GUI_COLOR_TASKBAR     COLOR_LIGHT_GRAY    /* Gray taskbar */
-#define GUI_COLOR_CURSOR      COLOR_WHITE
 
 /* Window storage */
 static gui_window_t windows[MAX_WINDOWS];
@@ -31,66 +39,222 @@ static int active_window = -1;
 static gui_button_t buttons[MAX_BUTTONS];
 static int num_buttons = 0;
 
-/* Cursor state - simple overwrite, no backup needed for games */
-static int cursor_drawn = 0;
-static int cursor_last_x = -1, cursor_last_y = -1;
+/* ============================================================================
+ * CURSOR SYSTEM 2.0 - Optimized rectangle redraws
+ * ============================================================================ */
 
-/* Dirty rectangle system */
-static dirty_rect_t dirty_rects[MAX_DIRTY_RECTS];
-static int num_dirty_rects = 0;
+/* Cursor state */
+static int cursor_visible = 0;
+static int cursor_x = 0;
+static int cursor_y = 0;
+static int cursor_last_x = -1;
+static int cursor_last_y = -1;
 
-/* Invalidate cursor - erase it first if drawn */
-void gui_cursor_invalidate(void) {
-    if (cursor_drawn) {
-        gui_erase_cursor();
+/* Cursor dimensions */
+#define CURSOR_WIDTH 12
+#define CURSOR_BUFFER 32  /* Extra pixels to redraw around cursor */
+
+/* Arrow cursor shape - 1=black border, 2=white fill, 0=transparent */
+static const uint8_t cursor_shape[16][12] = {
+    {1,0,0,0,0,0,0,0,0,0,0,0},
+    {1,1,0,0,0,0,0,0,0,0,0,0},
+    {1,2,1,0,0,0,0,0,0,0,0,0},
+    {1,2,2,1,0,0,0,0,0,0,0,0},
+    {1,2,2,2,1,0,0,0,0,0,0,0},
+    {1,2,2,2,2,1,0,0,0,0,0,0},
+    {1,2,2,2,2,2,1,0,0,0,0,0},
+    {1,2,2,2,2,2,2,1,0,0,0,0},
+    {1,2,2,2,2,2,2,2,1,0,0,0},
+    {1,2,2,2,2,2,2,2,2,1,0,0},
+    {1,2,2,2,2,2,1,1,1,1,1,0},
+    {1,2,2,1,2,2,1,0,0,0,0,0},
+    {1,2,1,0,1,2,2,1,0,0,0,0},
+    {1,1,0,0,1,2,2,1,0,0,0,0},
+    {1,0,0,0,0,1,2,2,1,0,0,0},
+    {0,0,0,0,0,1,1,1,1,0,0,0}
+};
+
+/* Redraw the area around a cursor position (cursor + buffer) */
+static void redraw_cursor_area(int x, int y) {
+    /* Calculate redraw rectangle */
+    int left = x - CURSOR_BUFFER;
+    int top = y - CURSOR_BUFFER;
+    int width = CURSOR_WIDTH + CURSOR_BUFFER * 2;
+    int height = CURSOR_HEIGHT + CURSOR_BUFFER * 2;
+    
+    /* Clamp to screen bounds */
+    if (left < 0) {
+        width += left;
+        left = 0;
     }
-    cursor_drawn = 0;
-    cursor_last_x = -1;
-    cursor_last_y = -1;
-}
-
-/* Add a dirty rectangle */
-void gui_add_dirty_rect(int x, int y, int width, int height) {
-    if (num_dirty_rects >= MAX_DIRTY_RECTS) {
-        /* Overflow - mark whole screen dirty by merging all */
-        dirty_rects[0].x = 0;
-        dirty_rects[0].y = 0;
-        dirty_rects[0].width = SCREEN_WIDTH;
-        dirty_rects[0].height = SCREEN_HEIGHT;
-        dirty_rects[0].dirty = 1;
-        num_dirty_rects = 1;
-        return;
+    if (top < 0) {
+        height += top;
+        top = 0;
+    }
+    if (left + width > SCREEN_WIDTH) {
+        width = SCREEN_WIDTH - left;
+    }
+    if (top + height > SCREEN_HEIGHT) {
+        height = SCREEN_HEIGHT - top;
     }
     
-    /* Clamp to screen */
-    if (x < 0) { width += x; x = 0; }
-    if (y < 0) { height += y; y = 0; }
-    if (x + width > SCREEN_WIDTH) width = SCREEN_WIDTH - x;
-    if (y + height > SCREEN_HEIGHT) height = SCREEN_HEIGHT - y;
     if (width <= 0 || height <= 0) return;
     
-    dirty_rects[num_dirty_rects].x = x;
-    dirty_rects[num_dirty_rects].y = y;
-    dirty_rects[num_dirty_rects].width = width;
-    dirty_rects[num_dirty_rects].height = height;
-    dirty_rects[num_dirty_rects].dirty = 1;
-    num_dirty_rects++;
-}
-
-/* Check if there are dirty rectangles */
-int gui_has_dirty_rects(void) {
-    return num_dirty_rects > 0;
-}
-
-/* Clear all dirty rectangles */
-void gui_clear_dirty_rects(void) {
-    num_dirty_rects = 0;
-}
-
-/* Redraw only dirty areas (stub - called from kernel) */
-void gui_redraw_dirty(void) {
-    /* This would be implemented with clipping, but for now kernel handles it */
-    num_dirty_rects = 0;
+    /* Redraw desktop background in this area */
+    vga_fillrect(left, top, width, height, get_desktop_color());
+    
+    /* Redraw any desktop icons that intersect this area */
+    for (int i = 0; desktop_icons[i].label; i++) {
+        int ix = desktop_icons[i].x;
+        int iy = desktop_icons[i].y;
+        int iw = 48;
+        int ih = 32;
+        
+        /* Check if icon intersects redraw area */
+        if (ix < left + width && ix + iw > left &&
+            iy < top + height && iy + ih > top) {
+            
+            /* Redraw the icon */
+            vga_fillrect(ix, iy, iw, ih, COLOR_WHITE);
+            vga_rect(ix, iy, iw, ih, COLOR_BLACK);
+            vga_fillrect(ix + 14, iy + 4, 20, 16, COLOR_BLUE);
+            
+            int label_len = 0;
+            const char* s = desktop_icons[i].label;
+            while (*s++) label_len++;
+            int lx = ix + (iw - label_len * 8) / 2;
+            vga_putstring(lx, iy + 23, desktop_icons[i].label, COLOR_BLACK, COLOR_WHITE);
+        }
+    }
+    
+    /* Redraw taskbar if it intersects */
+    int taskbar_y = SCREEN_HEIGHT - 28;
+    if (top + height > taskbar_y) {
+        /* Redraw taskbar in the intersecting area */
+        int tb_left = left;
+        int tb_width = width;
+        if (tb_left < 0) tb_left = 0;
+        if (tb_left + tb_width > SCREEN_WIDTH) tb_width = SCREEN_WIDTH - tb_left;
+        
+        vga_fillrect(tb_left, taskbar_y, tb_width, 28, GUI_COLOR_TASKBAR);
+        
+        /* Redraw taskbar elements if they intersect */
+        if (tb_left < 60) {  /* Start button */
+            int start_w = 60;
+            int start_h = 22;
+            int start_x = 2;
+            int start_y = taskbar_y + 3;
+            
+            vga_fillrect(start_x, start_y, start_w, start_h, GUI_COLOR_BUTTON_BG);
+            vga_hline(start_x, start_y, start_w, COLOR_WHITE);
+            vga_vline(start_x, start_y, start_h, COLOR_WHITE);
+            vga_hline(start_x, start_y + start_h - 1, start_w, COLOR_BLACK);
+            vga_vline(start_x + start_w - 1, start_y, start_h, COLOR_BLACK);
+            vga_hline(start_x + 1, start_y + start_h - 2, start_w - 2, COLOR_DARK_GRAY);
+            vga_vline(start_x + start_w - 2, start_y + 1, start_h - 2, COLOR_DARK_GRAY);
+            
+            vga_fillrect(start_x + 5, start_y + 5, 5, 5, COLOR_RED);
+            vga_fillrect(start_x + 5, start_y + 11, 5, 5, COLOR_BLUE);
+            vga_fillrect(start_x + 11, start_y + 5, 5, 5, COLOR_GREEN);
+            vga_fillrect(start_x + 11, start_y + 11, 5, 5, COLOR_YELLOW);
+            
+            vga_putstring(start_x + 20, start_y + 7, "Start", COLOR_BLACK, GUI_COLOR_BUTTON_BG);
+        }
+        
+        if (tb_left + tb_width > SCREEN_WIDTH - 60) {  /* Clock */
+            int clock_x = SCREEN_WIDTH - 60;
+            int start_y = taskbar_y + 3;
+            int start_h = 22;
+            
+            vga_fillrect(clock_x, start_y, 56, start_h, GUI_COLOR_TASKBAR);
+            vga_hline(clock_x, start_y, 56, COLOR_DARK_GRAY);
+            vga_vline(clock_x, start_y, start_h, COLOR_DARK_GRAY);
+            vga_hline(clock_x + 1, start_y + 1, 54, COLOR_BLACK);
+            vga_vline(clock_x + 1, start_y + 1, start_h - 2, COLOR_BLACK);
+            vga_hline(clock_x, start_y + start_h - 1, 56, COLOR_WHITE);
+            vga_vline(clock_x + 55, start_y, start_h, COLOR_WHITE);
+            vga_putstring(clock_x + 8, start_y + 7, "12:00", COLOR_BLACK, GUI_COLOR_TASKBAR);
+        }
+    }
+    
+    /* Redraw start menu if open and intersects */
+    if (start_menu_open) {
+        int taskbar_y = SCREEN_HEIGHT - 28;
+        int menu_x = 2;
+        int menu_y = taskbar_y - 120;
+        int menu_w = 140;
+        int menu_h = 120;
+        
+        if (menu_x < left + width && menu_x + menu_w > left &&
+            menu_y < top + height && menu_y + menu_h > top) {
+            
+            vga_fillrect(menu_x, menu_y, menu_w, menu_h, COLOR_LIGHT_GRAY);
+            vga_rect(menu_x, menu_y, menu_w, menu_h, COLOR_BLACK);
+            
+            const char* menu_items[] = {"Programs", "Files", "Settings", "Shutdown", 0};
+            int item_h = 20;
+            for (int j = 0; menu_items[j]; j++) {
+                int item_y = menu_y + j * item_h;
+                vga_putstring(menu_x + 8, item_y + 6, menu_items[j], COLOR_BLACK, COLOR_LIGHT_GRAY);
+            }
+        }
+    }
+    
+    /* Redraw windows that intersect this area */
+    for (int i = 0; i < num_windows; i++) {
+        gui_window_t* win = &windows[i];
+        if (!win->visible) continue;
+        
+        if (win->x < left + width && win->x + win->width > left &&
+            win->y < top + height && win->y + win->height > top) {
+            
+            /* Redraw this window */
+            gui_draw_window(win);
+            
+            /* Redraw its buttons */
+            for (int j = 0; j < num_buttons; j++) {
+                gui_button_t* btn = &buttons[j];
+                if (btn->window_id == i && btn->visible) {
+                    gui_draw_button(btn);
+                }
+            }
+        }
+    }
+    
+    /* Redraw app contents for windows in this area */
+    for (int i = 0; i < num_windows; i++) {
+        gui_window_t* win = &windows[i];
+        if (!win->visible) continue;
+        
+        if (win->x < left + width && win->x + win->width > left &&
+            win->y < top + height && win->y + win->height > top) {
+            
+            /* Redraw app content */
+            if (i == get_browser_win()) browser_draw_content(win);
+            else if (i == get_files_win()) files_draw_content(win);
+            else if (i == get_notepad_win()) notepad_draw_content(win);
+            else if (i == get_terminal_win()) terminal_draw_content(win);
+            else if (i == get_calc_win()) calc_draw_content(win);
+            else if (i == get_settings_win()) settings_draw_content(win);
+            else if (i == get_about_win()) about_draw_content(win);
+        }
+    }
+/* Draw cursor at position - called AFTER all other rendering */
+static void draw_cursor_at(int x, int y) {
+    for (int j = 0; j < 16; j++) {
+        for (int i = 0; i < 12; i++) {
+            int px = x + i;
+            int py = y + j;
+            if (px >= 0 && px < SCREEN_WIDTH && py >= 0 && py < SCREEN_HEIGHT) {
+                uint8_t val = cursor_shape[j][i];
+                if (val == 1) {
+                    vga_putpixel(px, py, COLOR_BLACK);
+                } else if (val == 2) {
+                    vga_putpixel(px, py, COLOR_WHITE);
+                }
+            }
+        }
+    }
 }
 
 /* Point in rect check */
@@ -103,19 +267,9 @@ void gui_init(void) {
     num_windows = 0;
     num_buttons = 0;
     active_window = -1;
-    cursor_drawn = 0;
-    cursor_last_x = -1;
-    cursor_last_y = -1;
-    num_dirty_rects = 0;
-    
-    for (int i = 0; i < MAX_WINDOWS; i++) {
-        windows[i].visible = 0;
-        windows[i].active = 0;
-    }
-    
-    for (int i = 0; i < MAX_BUTTONS; i++) {
-        buttons[i].visible = 0;
-    }
+    cursor_visible = 0;
+    cursor_x = SCREEN_WIDTH / 2;
+    cursor_y = SCREEN_HEIGHT / 2;
 }
 
 /* Create window */
@@ -208,65 +362,81 @@ void gui_close_window(int window_id) {
     }
 }
 
-/* Erase cursor by drawing desktop color over it */
-static void erase_cursor_area(int x, int y) {
-    /* Just fill with desktop color - simple and fast */
-    vga_fillrect(x, y, 8, 12, GUI_COLOR_DESKTOP);
-}
+/* ============================================================================
+ * CURSOR API 2.0 - Optimized rectangle redraws
+ * ============================================================================ */
 
-/* Draw solid cursor at position - white with black outline */
-static void draw_solid_cursor(int x, int y) {
-    /* Black outline */
-    vga_putpixel(x+1, y, COLOR_BLACK);
-    vga_putpixel(x+2, y+1, COLOR_BLACK);
-    vga_putpixel(x+3, y+2, COLOR_BLACK);
-    vga_putpixel(x+4, y+3, COLOR_BLACK);
-    vga_putpixel(x+5, y+4, COLOR_BLACK);
-    vga_putpixel(x+6, y+5, COLOR_BLACK);
-    vga_putpixel(x+4, y+6, COLOR_BLACK);
-    vga_putpixel(x+5, y+7, COLOR_BLACK);
-    vga_putpixel(x+6, y+8, COLOR_BLACK);
-    vga_putpixel(x+7, y+9, COLOR_BLACK);
-    
-    /* White fill */
-    vga_putpixel(x, y, COLOR_WHITE);
-    vga_putpixel(x, y+1, COLOR_WHITE); vga_putpixel(x+1, y+1, COLOR_WHITE);
-    vga_putpixel(x, y+2, COLOR_WHITE); vga_putpixel(x+1, y+2, COLOR_WHITE); vga_putpixel(x+2, y+2, COLOR_WHITE);
-    vga_putpixel(x, y+3, COLOR_WHITE); vga_putpixel(x+1, y+3, COLOR_WHITE); vga_putpixel(x+2, y+3, COLOR_WHITE); vga_putpixel(x+3, y+3, COLOR_WHITE);
-    vga_putpixel(x, y+4, COLOR_WHITE); vga_putpixel(x+1, y+4, COLOR_WHITE); vga_putpixel(x+2, y+4, COLOR_WHITE); vga_putpixel(x+3, y+4, COLOR_WHITE); vga_putpixel(x+4, y+4, COLOR_WHITE);
-    vga_putpixel(x, y+5, COLOR_WHITE); vga_putpixel(x+1, y+5, COLOR_WHITE); vga_putpixel(x+2, y+5, COLOR_WHITE); vga_putpixel(x+3, y+5, COLOR_WHITE); vga_putpixel(x+4, y+5, COLOR_WHITE); vga_putpixel(x+5, y+5, COLOR_WHITE);
-    vga_putpixel(x, y+6, COLOR_WHITE); vga_putpixel(x+1, y+6, COLOR_WHITE); vga_putpixel(x+2, y+6, COLOR_WHITE); vga_putpixel(x+3, y+6, COLOR_WHITE);
-    vga_putpixel(x, y+7, COLOR_WHITE); vga_putpixel(x+1, y+7, COLOR_WHITE); vga_putpixel(x+3, y+7, COLOR_WHITE); vga_putpixel(x+4, y+7, COLOR_WHITE);
-    vga_putpixel(x, y+8, COLOR_WHITE); vga_putpixel(x+4, y+8, COLOR_WHITE); vga_putpixel(x+5, y+8, COLOR_WHITE);
-    vga_putpixel(x+5, y+9, COLOR_WHITE); vga_putpixel(x+6, y+9, COLOR_WHITE);
-}
-
-/* Erase cursor by restoring saved background */
-void gui_erase_cursor(void) {
-    if (!cursor_drawn || cursor_last_x < 0 || cursor_last_y < 0) return;
-    erase_cursor_area(cursor_last_x, cursor_last_y);
-    cursor_drawn = 0;
-}
-
-/* Draw mouse cursor with background save/restore */
+/* Draw cursor - optimized: only redraws cursor area when moved */
 void gui_draw_cursor(int x, int y) {
-    /* Erase old cursor first */
-    gui_erase_cursor();
-    
     /* Clamp position */
     if (x < 0) x = 0;
     if (y < 0) y = 0;
-    if (x >= SCREEN_WIDTH - 8) x = SCREEN_WIDTH - 9;
-    if (y >= SCREEN_HEIGHT - 12) y = SCREEN_HEIGHT - 13;
+    if (x > SCREEN_WIDTH - CURSOR_WIDTH) x = SCREEN_WIDTH - CURSOR_WIDTH;
+    if (y > SCREEN_HEIGHT - CURSOR_HEIGHT) y = SCREEN_HEIGHT - CURSOR_HEIGHT;
     
-    /* Draw solid cursor */
-    draw_solid_cursor(x, y);
-    cursor_drawn = 1;
+    /* If cursor moved, erase old position by redrawing that area */
+    if (cursor_last_x >= 0 && cursor_last_y >= 0 && 
+        (cursor_last_x != x || cursor_last_y != y)) {
+        /* Call kernel function to redraw cursor area */
+        extern void redraw_cursor_area_kernel(int x, int y);
+        redraw_cursor_area_kernel(cursor_last_x, cursor_last_y);
+    }
+    
+    /* Update position */
+    cursor_x = x;
+    cursor_y = y;
+    cursor_visible = 1;
+    
+    /* Draw cursor at new position */
+    draw_cursor_at(x, y);
+    
+    /* Update last position */
     cursor_last_x = x;
     cursor_last_y = y;
 }
 
-/* Draw Windows-style taskbar */
+/* Erase cursor - in 2.0, this is a no-op since we redraw everything */
+void gui_erase_cursor(void) {
+    cursor_visible = 0;
+}
+
+/* Invalidate cursor - in 2.0, just marks cursor as not drawn */
+void gui_cursor_invalidate(void) {
+    cursor_visible = 0;
+}
+
+/* ============================================================================
+ * DIRTY RECT STUBS (kept for API compatibility)
+ * ============================================================================ */
+
+static int num_dirty_rects = 0;
+
+void gui_add_dirty_rect(int x, int y, int width, int height) {
+    (void)x; (void)y; (void)width; (void)height;
+}
+
+int gui_has_dirty_rects(void) {
+    return num_dirty_rects > 0;
+}
+
+void gui_clear_dirty_rects(void) {
+    num_dirty_rects = 0;
+}
+
+void gui_redraw_dirty(void) {
+    num_dirty_rects = 0;
+}
+
+/* ============================================================================
+ * DRAWING FUNCTIONS
+ * ============================================================================ */
+
+/* Draw desktop */
+void gui_draw_desktop(void) {
+    vga_fillrect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT - 28, GUI_COLOR_DESKTOP);
+}
+
+/* Draw menubar/taskbar */
 void gui_draw_menubar(void) {
     int taskbar_height = 28;
     int taskbar_y = SCREEN_HEIGHT - taskbar_height;
@@ -293,14 +463,14 @@ void gui_draw_menubar(void) {
     vga_hline(start_x + 1, start_y + start_h - 2, start_w - 2, COLOR_DARK_GRAY);
     vga_vline(start_x + start_w - 2, start_y + 1, start_h - 2, COLOR_DARK_GRAY);
     
-    /* Windows logo (simplified) */
-    vga_fillrect(start_x + 5, start_y + 5, 4, 5, COLOR_RED);
-    vga_fillrect(start_x + 5, start_y + 11, 4, 5, COLOR_RED);
-    vga_fillrect(start_x + 10, start_y + 5, 4, 5, COLOR_RED);
-    vga_fillrect(start_x + 10, start_y + 11, 4, 5, COLOR_RED);
+    /* Windows logo (simplified colored squares) */
+    vga_fillrect(start_x + 5, start_y + 5, 5, 5, COLOR_RED);
+    vga_fillrect(start_x + 5, start_y + 11, 5, 5, COLOR_BLUE);
+    vga_fillrect(start_x + 11, start_y + 5, 5, 5, COLOR_GREEN);
+    vga_fillrect(start_x + 11, start_y + 11, 5, 5, COLOR_YELLOW);
     
     /* Start text */
-    vga_putstring(start_x + 18, start_y + 7, "Start", COLOR_BLACK, GUI_COLOR_BUTTON_BG);
+    vga_putstring(start_x + 20, start_y + 7, "Start", COLOR_BLACK, GUI_COLOR_BUTTON_BG);
     
     /* Clock area (sunken) */
     int clock_x = SCREEN_WIDTH - 60;
@@ -311,17 +481,7 @@ void gui_draw_menubar(void) {
     vga_vline(clock_x + 1, start_y + 1, start_h - 2, COLOR_BLACK);
     vga_hline(clock_x, start_y + start_h - 1, 56, COLOR_WHITE);
     vga_vline(clock_x + 55, start_y, start_h, COLOR_WHITE);
-    vga_putstring(clock_x + 8, start_y + 7, "12:00 PM", COLOR_BLACK, GUI_COLOR_TASKBAR);
-    
-    /* Network status (middle-right) */
-    int net_x = clock_x - 120;
-    vga_fillrect(net_x, start_y, 110, start_h, GUI_COLOR_TASKBAR);
-}
-
-/* Draw desktop */
-void gui_draw_desktop(void) {
-    /* Windows teal/cyan desktop */
-    vga_fillrect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT - 28, GUI_COLOR_DESKTOP);
+    vga_putstring(clock_x + 8, start_y + 7, "12:00", COLOR_BLACK, GUI_COLOR_TASKBAR);
 }
 
 /* Draw window */
@@ -333,7 +493,7 @@ void gui_draw_window(gui_window_t* win) {
     int w = win->width;
     int h = win->height;
     
-    /* Outer 3D border (raised) */
+    /* Window background */
     vga_fillrect(x, y, w, h, GUI_COLOR_WINDOW_BG);
     
     /* Light edges (top-left) */
@@ -363,11 +523,11 @@ void gui_draw_window(gui_window_t* win) {
         vga_putstring(x + 8, y + 7, win->title, GUI_COLOR_TITLE_TEXT, titlebar_color);
     }
     
-    /* Single big close button (X) */
-    int btn_width = 44;
+    /* Close button (X) */
+    int btn_width = 16;
     int btn_height = 14;
-    int btn_y = win->y + 5;
-    int close_x = win->x + win->width - btn_width - 6;
+    int btn_y = y + 5;
+    int close_x = x + w - btn_width - 6;
     
     /* Red background for close button */
     vga_fillrect(close_x, btn_y, btn_width, btn_height, COLOR_RED);
@@ -376,13 +536,15 @@ void gui_draw_window(gui_window_t* win) {
     vga_hline(close_x, btn_y + btn_height - 1, btn_width, COLOR_BROWN);
     vga_vline(close_x + btn_width - 1, btn_y, btn_height, COLOR_BROWN);
     
-    /* Draw X in center */
+    /* Draw X */
     int cx = close_x + btn_width / 2;
     int cy = btn_y + btn_height / 2;
-    vga_line(cx - 4, cy - 4, cx + 4, cy + 4, COLOR_WHITE);
-    vga_line(cx + 4, cy - 4, cx - 4, cy + 4, COLOR_WHITE);
-    vga_line(cx - 3, cy - 4, cx + 5, cy + 4, COLOR_WHITE);
-    vga_line(cx + 5, cy - 4, cx - 3, cy + 4, COLOR_WHITE);
+    for (int d = -3; d <= 3; d++) {
+        vga_putpixel(cx + d, cy + d, COLOR_WHITE);
+        vga_putpixel(cx + d, cy - d, COLOR_WHITE);
+        vga_putpixel(cx + d + 1, cy + d, COLOR_WHITE);
+        vga_putpixel(cx + d + 1, cy - d, COLOR_WHITE);
+    }
 }
 
 /* Draw button */
@@ -397,7 +559,7 @@ void gui_draw_button(gui_button_t* btn) {
         gui_window_t* win = &windows[btn->window_id];
         if (!win->visible) return;
         x += win->x;
-        y += win->y + 16;  /* Below title bar */
+        y += win->y + 16;
     }
     
     uint8_t bg_color = GUI_COLOR_BUTTON_BG;
@@ -413,7 +575,7 @@ void gui_draw_button(gui_button_t* btn) {
     /* Button border */
     vga_rect(x, y, btn->width, btn->height, GUI_COLOR_BORDER);
     
-    /* Button shadow (3D effect) */
+    /* Button 3D effect */
     if (!btn->pressed) {
         vga_hline(x + 1, y + 1, btn->width - 2, COLOR_WHITE);
         vga_vline(x + 1, y + 1, btn->height - 2, COLOR_WHITE);
@@ -424,7 +586,7 @@ void gui_draw_button(gui_button_t* btn) {
         vga_vline(x + 1, y + 1, btn->height - 2, COLOR_DARK_GRAY);
     }
     
-    /* Calculate text position (centered) */
+    /* Text (centered) */
     int text_len = 0;
     const char* s = btn->label;
     while (*s++) text_len++;
@@ -440,7 +602,7 @@ void gui_draw_button(gui_button_t* btn) {
     vga_putstring(text_x, text_y, btn->label, GUI_COLOR_BUTTON_FG, bg_color);
 }
 
-/* Update GUI */
+/* Update GUI - handle input */
 void gui_update(void) {
     int mx = mouse_get_x();
     int my = mouse_get_y();
@@ -463,8 +625,8 @@ void gui_update(void) {
                 if (win->y < 13) win->y = 13;
                 if (win->x + win->width > SCREEN_WIDTH) 
                     win->x = SCREEN_WIDTH - win->width;
-                if (win->y + win->height > SCREEN_HEIGHT)
-                    win->y = SCREEN_HEIGHT - win->height;
+                if (win->y + win->height > SCREEN_HEIGHT - 28)
+                    win->y = SCREEN_HEIGHT - 28 - win->height;
             } else {
                 win->dragging = 0;
             }
@@ -478,13 +640,15 @@ void gui_update(void) {
         if (!win->visible) continue;
         
         /* Check close button */
-        if (clicked && point_in_rect(mx, my, win->x + win->width - 14, win->y + 3, 10, 10)) {
+        int close_x = win->x + win->width - 22;
+        int close_y = win->y + 5;
+        if (clicked && point_in_rect(mx, my, close_x, close_y, 16, 14)) {
             win->visible = 0;
             return;
         }
         
         /* Check title bar for dragging */
-        if (clicked && point_in_rect(mx, my, win->x, win->y, win->width, 16)) {
+        if (clicked && point_in_rect(mx, my, win->x, win->y, win->width, 20)) {
             win->dragging = 1;
             win->drag_offset_x = mx - win->x;
             win->drag_offset_y = my - win->y;
@@ -532,7 +696,7 @@ void gui_update(void) {
     }
 }
 
-/* Draw entire GUI (windows only, no desktop/menubar/cursor - kernel handles those) */
+/* Draw entire GUI (windows and buttons only) */
 void gui_draw(void) {
     /* Draw windows (back to front) */
     for (int i = 0; i < num_windows; i++) {

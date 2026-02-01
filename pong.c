@@ -164,6 +164,6 @@ void pong_run(void) {
         frame_count++;
         
         /* Limit game speed */
-        for (volatile int i = 0; i < 40000; i++);
+        for (volatile int i = 0; i < 400000; i++);
     }
 }

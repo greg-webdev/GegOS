@@ -101,16 +101,25 @@ start64_long:
     mov ax, 0x10
     mov ds, ax
     mov es, ax
+    mov fs, ax
+    mov gs, ax
     mov ss, ax
     
     mov rsp, stack_top
     
-    mov rdi, rbx                ; Multiboot info
+    mov rdi, rbx                ; Multiboot info in RDI (first arg)
+    mov rsi, rdx                ; Magic number in RSI (second arg)
+    
+    ; Call kernel64_main(multiboot_info, magic)
     call kernel64_main
     
     cli
     hlt
 
 no_64bit:
+    ; Display error message - simplified for 64-bit
+    mov rax, 0x4f204f204f204f20  ; Print spaces for delay
+    mov rbx, 0x4f204f204f204f20
+    mov rcx, 0x4f204f204f204f20
     cli
     hlt

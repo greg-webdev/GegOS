@@ -115,7 +115,10 @@ void gui_draw_menubar(void);
 /* Get window by ID */
 gui_window_t* gui_get_window(int id);
 
-/* Check if point is in rect */
-int point_in_rect(int px, int py, int rx, int ry, int rw, int rh);
-
+/* Desktop icon structure */
+typedef struct {
+    int x, y;
+    const char* label;
+    void (*action)(void);
+} desktop_icon_t;
 #endif /* GUI_H */

@@ -62,11 +62,6 @@ static int needs_redraw = 1;
 static int start_menu_open = 0;
 
 /* Desktop icon positions */
-typedef struct {
-    int x, y;
-    const char* label;
-    void (*action)(void);
-} desktop_icon_t;
 
 /* Icon click handlers */
 static void click_wifi(void) { app_wifi(); needs_redraw = 1; }
@@ -350,28 +345,30 @@ static int handle_app_click(int mx, int my) {
     return 0;
 }
 
-/* Draw everything - called only on major changes */
+/* Draw everything - optimized partial redraws */
+static void full_redraw(void) __attribute__((unused));
 static void full_redraw(void) {
     /* Erase cursor properly before redrawing */
     gui_erase_cursor();
-    
+
     /* Wait for vsync before drawing to reduce tearing */
     vga_vsync();
-    
-    /* Draw desktop background */
+
+    /* Only redraw desktop if needed - for now we redraw everything */
+    /* TODO: Implement dirty rectangles for partial redraws */
     vga_fillrect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT - 28, get_desktop_color());
-    
+
     /* Draw desktop icons */
     for (int i = 0; desktop_icons[i].label; i++) {
         int ix = desktop_icons[i].x;
         int iy = desktop_icons[i].y;
-        
+
         /* Icon box */
         vga_fillrect(ix, iy, 48, 32, COLOR_WHITE);
         vga_rect(ix, iy, 48, 32, COLOR_BLACK);
         /* Icon symbol */
         vga_fillrect(ix + 14, iy + 4, 20, 16, COLOR_BLUE);
-        
+
         /* Label */
         int label_len = 0;
         const char* s = desktop_icons[i].label;
@@ -379,10 +376,10 @@ static void full_redraw(void) {
         int lx = ix + (48 - label_len * 8) / 2;
         vga_putstring(lx, iy + 23, desktop_icons[i].label, COLOR_BLACK, COLOR_WHITE);
     }
-    
+
     /* Draw taskbar */
     gui_draw_menubar();
-    
+
     /* Draw start menu if open */
     if (start_menu_open) {
         int taskbar_y = SCREEN_HEIGHT - 28;
@@ -391,11 +388,11 @@ static void full_redraw(void) {
         int menu_w = 140;
         int menu_h = 120;
         int item_h = 20;
-        
+
         /* Menu background with border */
         vga_fillrect(menu_x, menu_y, menu_w, menu_h, COLOR_LIGHT_GRAY);
         vga_rect(menu_x, menu_y, menu_w, menu_h, COLOR_BLACK);
-        
+
         /* Menu items: Programs, Files, Settings, Shutdown */
         const char* menu_items[] = {"Programs", "Files", "Settings", "Shutdown", 0};
         for (int i = 0; menu_items[i]; i++) {
@@ -407,13 +404,13 @@ static void full_redraw(void) {
             }
         }
     }
-    
+
     /* Draw windows */
     gui_draw();
-    
+
     /* Draw app contents inside windows */
     draw_app_contents();
-    
+
     /* Invalidate cursor backup since screen changed */
     gui_cursor_invalidate();
 }
@@ -462,6 +459,173 @@ static void redraw_start_menu_area(void) {
     }
     
     gui_cursor_invalidate();
+}
+
+/* Redraw the area around a cursor position (cursor + 32 pixel buffer) */
+void redraw_cursor_area_kernel(int x, int y) {
+    /* Calculate redraw rectangle: cursor size + 32 pixel buffer */
+    int left = x - 32;
+    int top = y - 32;
+    int width = 12 + 32 * 2;  /* CURSOR_WIDTH + buffer*2 */
+    int height = 16 + 32 * 2; /* CURSOR_HEIGHT + buffer*2 */
+    
+    /* Clamp to screen bounds */
+    if (left < 0) {
+        width += left;
+        left = 0;
+    }
+    if (top < 0) {
+        height += top;
+        top = 0;
+    }
+    if (left + width > SCREEN_WIDTH) {
+        width = SCREEN_WIDTH - left;
+    }
+    if (top + height > SCREEN_HEIGHT) {
+        height = SCREEN_HEIGHT - top;
+    }
+    
+    if (width <= 0 || height <= 0) return;
+    
+    /* Redraw desktop background in this area */
+    vga_fillrect(left, top, width, height, get_desktop_color());
+    
+    /* Redraw any desktop icons that intersect this area */
+    for (int i = 0; desktop_icons[i].label; i++) {
+        int ix = desktop_icons[i].x;
+        int iy = desktop_icons[i].y;
+        int iw = 48;
+        int ih = 32;
+        
+        /* Check if icon intersects redraw area */
+        if (ix < left + width && ix + iw > left &&
+            iy < top + height && iy + ih > top) {
+            
+            /* Redraw the icon */
+            vga_fillrect(ix, iy, iw, ih, COLOR_WHITE);
+            vga_rect(ix, iy, iw, ih, COLOR_BLACK);
+            vga_fillrect(ix + 14, iy + 4, 20, 16, COLOR_BLUE);
+            
+            int label_len = 0;
+            const char* s = desktop_icons[i].label;
+            while (*s++) label_len++;
+            int lx = ix + (iw - label_len * 8) / 2;
+            vga_putstring(lx, iy + 23, desktop_icons[i].label, COLOR_BLACK, COLOR_WHITE);
+        }
+    }
+    
+    /* Redraw taskbar if it intersects */
+    int taskbar_y = SCREEN_HEIGHT - 28;
+    if (top + height > taskbar_y) {
+        /* Redraw taskbar in the intersecting area */
+        int tb_left = left;
+        int tb_width = width;
+        if (tb_left < 0) tb_left = 0;
+        if (tb_left + tb_width > SCREEN_WIDTH) tb_width = SCREEN_WIDTH - tb_left;
+        
+        vga_fillrect(tb_left, taskbar_y, tb_width, 28, COLOR_LIGHT_GRAY);
+        
+        /* Redraw taskbar elements if they intersect */
+        if (tb_left < 60) {  /* Start button */
+            int start_w = 60;
+            int start_h = 22;
+            int start_x = 2;
+            int start_y = taskbar_y + 3;
+            
+            vga_fillrect(start_x, start_y, start_w, start_h, COLOR_LIGHT_GRAY);
+            vga_hline(start_x, start_y, start_w, COLOR_WHITE);
+            vga_vline(start_x, start_y, start_h, COLOR_WHITE);
+            vga_hline(start_x, start_y + start_h - 1, start_w, COLOR_BLACK);
+            vga_vline(start_x + start_w - 1, start_y, start_h, COLOR_BLACK);
+            vga_hline(start_x + 1, start_y + start_h - 2, start_w - 2, COLOR_DARK_GRAY);
+            vga_vline(start_x + start_w - 2, start_y + 1, start_h - 2, COLOR_DARK_GRAY);
+            
+            vga_fillrect(start_x + 5, start_y + 5, 5, 5, COLOR_RED);
+            vga_fillrect(start_x + 5, start_y + 11, 5, 5, COLOR_BLUE);
+            vga_fillrect(start_x + 11, start_y + 5, 5, 5, COLOR_GREEN);
+            vga_fillrect(start_x + 11, start_y + 11, 5, 5, COLOR_YELLOW);
+            
+            vga_putstring(start_x + 20, start_y + 7, "Start", COLOR_BLACK, COLOR_LIGHT_GRAY);
+        }
+        
+        if (tb_left + tb_width > SCREEN_WIDTH - 60) {  /* Clock */
+            int clock_x = SCREEN_WIDTH - 60;
+            int start_y = taskbar_y + 3;
+            int start_h = 22;
+            
+            vga_fillrect(clock_x, start_y, 56, start_h, COLOR_LIGHT_GRAY);
+            vga_hline(clock_x, start_y, 56, COLOR_DARK_GRAY);
+            vga_vline(clock_x, start_y, start_h, COLOR_DARK_GRAY);
+            vga_hline(clock_x + 1, start_y + 1, 54, COLOR_BLACK);
+            vga_vline(clock_x + 1, start_y + 1, start_h - 2, COLOR_BLACK);
+            vga_hline(clock_x, start_y + start_h - 1, 56, COLOR_WHITE);
+            vga_vline(clock_x + 55, start_y, start_h, COLOR_WHITE);
+            vga_putstring(clock_x + 8, start_y + 7, "12:00", COLOR_BLACK, COLOR_LIGHT_GRAY);
+        }
+    }
+    
+    /* Redraw start menu if open and intersects */
+    if (start_menu_open) {
+        int taskbar_y = SCREEN_HEIGHT - 28;
+        int menu_x = 2;
+        int menu_y = taskbar_y - 120;
+        int menu_w = 140;
+        int menu_h = 120;
+        
+        if (menu_x < left + width && menu_x + menu_w > left &&
+            menu_y < top + height && menu_y + menu_h > top) {
+            
+            vga_fillrect(menu_x, menu_y, menu_w, menu_h, COLOR_LIGHT_GRAY);
+            vga_rect(menu_x, menu_y, menu_w, menu_h, COLOR_BLACK);
+            
+            const char* menu_items[] = {"Programs", "Files", "Settings", "Shutdown", 0};
+            int item_h = 20;
+            for (int j = 0; menu_items[j]; j++) {
+                int item_y = menu_y + j * item_h;
+                vga_putstring(menu_x + 8, item_y + 6, menu_items[j], COLOR_BLACK, COLOR_LIGHT_GRAY);
+            }
+        }
+    }
+    
+    /* Redraw windows that intersect this area */
+    for (int i = 0; i < 16; i++) {  /* MAX_WINDOWS */
+        gui_window_t* win = gui_get_window(i);
+        if (!win || !win->visible) continue;
+        
+        if (win->x < left + width && win->x + win->width > left &&
+            win->y < top + height && win->y + win->height > top) {
+            
+            /* Redraw this window */
+            gui_draw_window(win);
+            
+            /* Redraw its buttons */
+            for (int j = 0; j < 32; j++) {  /* MAX_BUTTONS */
+                gui_button_t* btn = NULL; // gui_get_button(j); - need to add this function
+                if (btn && btn->window_id == i && btn->visible) {
+                    gui_draw_button(btn);
+                }
+            }
+        }
+    }
+    
+    /* Redraw app contents for windows in this area */
+    for (int i = 0; i < 16; i++) {  /* MAX_WINDOWS */
+        gui_window_t* win = gui_get_window(i);
+        if (!win || !win->visible) continue;
+        
+        if (win->x < left + width && win->x + win->width > left &&
+            win->y < top + height && win->y + win->height > top) {
+            
+            /* Redraw app content */
+            if (i == get_browser_win()) browser_draw_content(win);
+            else if (i == get_files_win()) files_draw_content(win);
+            else if (i == get_notepad_win()) notepad_draw_content(win);
+            else if (i == get_terminal_win()) terminal_draw_content(win);
+            else if (i == get_calc_win()) calc_draw_content(win);
+            else if (i == get_settings_win()) settings_draw_content(win);
+            else if (i == get_about_win()) about_draw_content(win);
+        }
+    }
 }
 
 /* Redraw only a specific window and its content - for future use */
@@ -726,21 +890,63 @@ void kernel_main(uint32_t magic, uint32_t* multiboot_info) {
         
         /* === RENDERING === */
         
-        /* Only full redraw when something major changed */
+        /* Redraw screen when needed (major changes only) */
         if (needs_redraw) {
-            full_redraw();
+            /* Full redraw - this is the simple, reliable approach */
+            vga_vsync();
+            
+            /* Desktop */
+            vga_fillrect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT - 28, get_desktop_color());
+            
+            /* Desktop icons */
+            for (int i = 0; desktop_icons[i].label; i++) {
+                int ix = desktop_icons[i].x;
+                int iy = desktop_icons[i].y;
+                vga_fillrect(ix, iy, 48, 32, COLOR_WHITE);
+                vga_rect(ix, iy, 48, 32, COLOR_BLACK);
+                vga_fillrect(ix + 14, iy + 4, 20, 16, COLOR_BLUE);
+                int label_len = 0;
+                const char* s = desktop_icons[i].label;
+                while (*s++) label_len++;
+                int lx = ix + (48 - label_len * 8) / 2;
+                vga_putstring(lx, iy + 23, desktop_icons[i].label, COLOR_BLACK, COLOR_WHITE);
+            }
+            
+            /* Taskbar */
+            gui_draw_menubar();
+            
+            /* Start menu if open */
+            if (start_menu_open) {
+                int taskbar_y = SCREEN_HEIGHT - 28;
+                int menu_x = 2;
+                int menu_y = taskbar_y - 120;
+                int menu_w = 140;
+                int menu_h = 120;
+                int item_h = 20;
+                vga_fillrect(menu_x, menu_y, menu_w, menu_h, COLOR_LIGHT_GRAY);
+                vga_rect(menu_x, menu_y, menu_w, menu_h, COLOR_BLACK);
+                const char* menu_items[] = {"Programs", "Files", "Settings", "Shutdown", 0};
+                for (int j = 0; menu_items[j]; j++) {
+                    int item_y = menu_y + j * item_h;
+                    vga_putstring(menu_x + 8, item_y + 6, menu_items[j], COLOR_BLACK, COLOR_LIGHT_GRAY);
+                }
+            }
+            
+            /* Windows */
+            gui_draw();
+            
+            /* App contents */
+            draw_app_contents();
+            
             needs_redraw = 0;
-            last_mx = -1;  /* Force cursor redraw */
         }
         
-        /* Update cursor position - lightweight, save/restore pixels */
-        if (mouse_moved || last_mx == -1) {
+        /* Update cursor position - optimized rectangle redraw */
+        if (mouse_moved) {
             gui_draw_cursor(mx, my);
-            last_mx = mx;
-            last_my = my;
         }
-        
-        /* Small delay to prevent CPU hogging */
-        for (volatile int i = 0; i < 5000; i++);
+
+        /* Frame rate limiting */
+        for (volatile int i = 0; i < 50000; i++);
     }
 }

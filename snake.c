@@ -266,6 +266,6 @@ void snake_run(void) {
         frame_count++;
         
         /* Frame delay */
-        for (volatile int i = 0; i < 80000; i++);
+        for (volatile int i = 0; i < 800000; i++);
     }
 }
