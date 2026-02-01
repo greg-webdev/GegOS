@@ -589,16 +589,33 @@ void redraw_cursor_area_kernel(int x, int y) {
 
         if (win->x < left + width && win->x + win->width > left &&
             win->y < top + height && win->y + win->height > top) {
-            /* Redraw just this window */
-            gui_draw_window(win);
-            /* And its content */
-            if (i == get_browser_win()) browser_draw_content(win);
-            else if (i == get_files_win()) files_draw_content(win);
-            else if (i == get_notepad_win()) notepad_draw_content(win);
-            else if (i == get_terminal_win()) terminal_draw_content(win);
-            else if (i == get_calc_win()) calc_draw_content(win);
-            else if (i == get_settings_win()) settings_draw_content(win);
-            else if (i == get_about_win()) about_draw_content(win);
+            /* Instead of redrawing entire window, just redraw the cursor area within the window */
+            /* Draw window background color in cursor area */
+            vga_fillrect(left, top, width, height, COLOR_LIGHT_GRAY);
+            
+            /* Draw window border if cursor area touches it */
+            if (left <= win->x + win->width - 1 && left + width > win->x &&
+                top <= win->y + win->height - 1 && top + height > win->y) {
+                /* Redraw border segments that intersect cursor area */
+                if (top <= win->y && top + height > win->y) {
+                    vga_hline(left, win->y, width, COLOR_BLACK); /* Top border */
+                }
+                if (top + height > win->y + win->height - 1) {
+                    vga_hline(left, win->y + win->height - 1, width, COLOR_BLACK); /* Bottom border */
+                }
+                if (left <= win->x && left + width > win->x) {
+                    vga_vline(win->x, top, height, COLOR_BLACK); /* Left border */
+                }
+                if (left + width > win->x + win->width - 1) {
+                    vga_vline(win->x + win->width - 1, top, height, COLOR_BLACK); /* Right border */
+                }
+            }
+            
+            /* For terminal windows, redraw the content (terminals are text-based so this is ok) */
+            if (i == get_terminal_win()) {
+                terminal_draw_content(win);
+            }
+            /* Other windows don't need content redraw for cursor area - they'll update when needed */
             return;
         }
     }
@@ -781,7 +798,7 @@ void kernel_main(uint32_t magic, uint32_t* multiboot_info) {
     vga_clear(COLOR_BLUE);
     vga_fillrect(220, 180, 200, 80, COLOR_WHITE);
     vga_rect(220, 180, 200, 80, COLOR_BLACK);
-    vga_putstring(260, 200, "GegOS v1.0", COLOR_BLACK, COLOR_WHITE);
+    vga_putstring(260, 200, "GegOS v2.1", COLOR_BLACK, COLOR_WHITE);
     vga_putstring(250, 230, "Starting...", COLOR_DARK_GRAY, COLOR_WHITE);
     
     /* Delay during startup */
@@ -851,9 +868,10 @@ void kernel_main(uint32_t magic, uint32_t* multiboot_info) {
                 vga_putstring(260, 150, "GegOS Locked", COLOR_WHITE, COLOR_BLUE);
                 vga_putstring(200, 200, "Enter password:", COLOR_WHITE, COLOR_BLUE);
                 
-                /* Password input box */
+                /* Password input box (highlighted to show it's selected) */
                 vga_fillrect(200, 220, 200, 24, COLOR_WHITE);
-                vga_rect(200, 220, 200, 24, COLOR_BLACK);
+                vga_rect(200, 220, 200, 24, COLOR_BLUE);  /* Blue border to show selection */
+                vga_rect(201, 221, 198, 22, COLOR_BLACK); /* Inner black border */
                 
                 /* Show asterisks for password */
                 for (int i = 0; i < lock_input_pos && i < 20; i++) {

@@ -324,7 +324,7 @@ static void exec_dir(void) {
 }
 
 static void exec_ver(void) {
-    add_output("GegOS [Version 1.0]");
+    add_output("GegOS [Version 2.1]");
     add_output("(c) 2026 GegOS Corporation.");
 }
 
@@ -389,7 +389,7 @@ void terminal_init(void) {
     output_count = 0;
     cmd_buffer[0] = 0;
     
-    add_output("GegOS Terminal v1.0");
+    add_output("GegOS Terminal v2.1");
     add_output("Type 'help' for commands");
     add_output("");
 }

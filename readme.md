@@ -1,4 +1,4 @@
-GegOS v1.0 - Complete Feature Set
+GegOS v2.1 - Complete Feature Set
 ==================================
 
 CORE FEATURES COMPLETED:
@@ -81,6 +81,7 @@ BUILD INSTRUCTIONS:
 ===================
 make clean
 make
+(or make all will create 64bit version together with 32 bit)
 # Creates GegOS.iso (13MB bootable image)
 
 TESTING ON HARDWARE:

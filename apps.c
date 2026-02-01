@@ -89,7 +89,7 @@ static const char* browser_pages[] = {
     "[3] Fun Page",
     
     "About GegOS\n\n"
-    "GegOS v1.0\n"
+    "GegOS v2.1\n"
     "A hobby operating\n"
     "system with GUI.\n\n"
     "[0] Back to Home",
@@ -734,7 +734,7 @@ void about_draw_content(gui_window_t* win) {
     vga_putstring(x + 4, y + 12, "Geg", COLOR_WHITE, COLOR_BLUE);
     
     /* Info */
-    vga_putstring(x + 40, y, "GegOS v1.0", COLOR_BLACK, COLOR_WHITE);
+    vga_putstring(x + 40, y, "GegOS v2.1", COLOR_BLACK, COLOR_WHITE);
     vga_putstring(x + 80, y, " v1.0", COLOR_RED, COLOR_WHITE);
     vga_putstring(x + 40, y + 12, "Hobby OS", COLOR_DARK_GRAY, COLOR_WHITE);
     vga_putstring(x + 40, y + 24, "2026", COLOR_DARK_GRAY, COLOR_WHITE);
