@@ -81,7 +81,7 @@ $(BUILD_DIR)/$(KERNEL_BIN): $(OBJECTS) linker.ld
 $(BUILD64_DIR)/$(KERNEL64_BIN): $(OBJECTS64) linker64.ld
 	@echo "LD64  $(KERNEL64_BIN)"
 	@$(LD64) $(LDFLAGS64) $(OBJECTS64) -o $@
-	@grub-file --is-x86-multiboot $@ && echo "Multiboot64: VALID" || (echo "ERROR: Multiboot64 invalid!"; exit 1)
+	@grub-file --is-x86-multiboot2 $@ && echo "Multiboot2: VALID" || (echo "ERROR: Multiboot2 invalid!"; exit 1)
 
 $(ISO_NAME): $(BUILD_DIR)/$(KERNEL_BIN) grub.cfg | dirs
 	@echo "Creating 32-bit ISO..."

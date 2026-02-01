@@ -1,21 +1,37 @@
-; boot64.s - 64-bit Multiboot bootloader for GegOS
+; boot64.s - 64-bit Multiboot2 bootloader for GegOS
 ; Assembler: NASM
 ; Target: x86-64 (64-bit)
 ; Enters long mode and boots 64-bit kernel
 
-; Multiboot 1 constants
-MBALIGN     equ  1 << 0
-MEMINFO     equ  1 << 1
-FLAGS       equ  MBALIGN | MEMINFO
-MAGIC       equ  0x1BADB002
-CHECKSUM    equ -(MAGIC + FLAGS)
+; Multiboot 2 constants
+MB2_MAGIC       equ 0xe85250d6
+MB2_ARCH        equ 0         ; i386 protected mode
+MB2_HEADER_LEN  equ header_end - header_start
+MB2_CHECKSUM    equ 0x100000000 - (MB2_MAGIC + MB2_ARCH + MB2_HEADER_LEN)
 
-; Multiboot header section
+; Multiboot2 header section
 section .multiboot
-align 4
-    dd MAGIC
-    dd FLAGS
-    dd CHECKSUM
+header_start:
+    dd MB2_MAGIC
+    dd MB2_ARCH
+    dd MB2_HEADER_LEN
+    dd MB2_CHECKSUM
+
+    ; Framebuffer tag
+    align 8
+    dw 5                    ; Type: framebuffer
+    dw 0                    ; Flags
+    dd 20                   ; Size
+    dd 1024                 ; Width
+    dd 768                  ; Height
+    dd 32                   ; Depth
+
+    ; End tag
+    align 8
+    dw 0                    ; Type: end
+    dw 0                    ; Flags
+    dd 8                    ; Size
+header_end:
 
 ; Stack section - 16KB stack
 section .bss

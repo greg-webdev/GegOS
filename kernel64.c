@@ -1,37 +1,121 @@
 /*
  * kernel64.c - GegOS Kernel v0.7 (64-bit x86-64 version)
- * Extended to 64-bit architecture
+ * Extended to 64-bit architecture with framebuffer support
  * 
- * NOTE: This is a minimal 64-bit kernel stub.
- * It demonstrates 64-bit boot capability but doesn't include
- * the full GUI and game features of the 32-bit version yet.
+ * Uses Multiboot 2 framebuffer for graphics output
  */
 
 #include <stdint.h>
 #include <stddef.h>
-#include "vga.h"
+#include "io.h"
+
+/* Multiboot 2 structures for framebuffer support */
+typedef struct {
+    uint32_t total_size;
+    uint32_t reserved;
+} multiboot2_info_header_t;
+
+typedef struct {
+    uint32_t type;
+    uint32_t size;
+} multiboot2_tag_header_t;
+
+typedef struct {
+    uint32_t type;        // 8
+    uint32_t size;
+    uint64_t framebuffer_addr;
+    uint32_t framebuffer_pitch;
+    uint32_t framebuffer_width;
+    uint32_t framebuffer_height;
+    uint8_t framebuffer_bpp;
+    uint8_t framebuffer_type;
+    uint16_t reserved;
+} multiboot2_framebuffer_tag_t;
+
+/* Global framebuffer information */
+static uint64_t fb_addr = 0;
+static uint32_t fb_pitch = 0;
+static uint32_t fb_width = 0;
+static uint32_t fb_height = 0;
+static uint8_t fb_bpp = 0;
+
+/* Parse Multiboot 2 information structure */
+static void parse_multiboot2_info(uint32_t* mb_info) {
+    multiboot2_info_header_t* header = (multiboot2_info_header_t*)mb_info;
+    uint32_t total_size = header->total_size;
+    
+    /* Start parsing tags after the header */
+    uint32_t offset = 8; // Skip header
+    while (offset < total_size) {
+        multiboot2_tag_header_t* tag = (multiboot2_tag_header_t*)((uint8_t*)mb_info + offset);
+        
+        if (tag->type == 8) { // Framebuffer tag
+            multiboot2_framebuffer_tag_t* fb_tag = (multiboot2_framebuffer_tag_t*)tag;
+            fb_addr = fb_tag->framebuffer_addr;
+            fb_pitch = fb_tag->framebuffer_pitch;
+            fb_width = fb_tag->framebuffer_width;
+            fb_height = fb_tag->framebuffer_height;
+            fb_bpp = fb_tag->framebuffer_bpp;
+        } else if (tag->type == 0) { // End tag
+            break;
+        }
+        
+        /* Move to next tag (aligned to 8 bytes) */
+        offset += (tag->size + 7) & ~7;
+    }
+}
+
+/* Framebuffer drawing functions - simplified for debug */
+
 
 /* Kernel main entry point - 64-bit version */
-void kernel64_main(uint32_t* multiboot_info, uint32_t magic) {
+void kernel64_main(uintptr_t multiboot_info, uint32_t magic) {
     (void)magic;
-    (void)multiboot_info;
     
-    /* Initialize VGA graphics */
-    vga_init();
+    /* Parse Multiboot 2 information to get framebuffer details */
+    parse_multiboot2_info((uint32_t*)multiboot_info);
     
-    /* Fill screen with blue to indicate 64-bit kernel */
-    vga_fillrect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, COLOR_BLUE);
+    /* If we have framebuffer info, use it */
+    if (fb_addr != 0 && fb_width > 0 && fb_height > 0) {
+        uint32_t* fb = (uint32_t*)fb_addr;
+        
+        /* Fill screen with blue to indicate successful framebuffer detection */
+        for (uint32_t y = 0; y < fb_height; y++) {
+            for (uint32_t x = 0; x < fb_width; x++) {
+                uint32_t color = 0xFF0000FF; // Blue background
+                fb[y * (fb_pitch / 4) + x] = color;
+            }
+        }
+        
+        /* Draw a white border */
+        for (uint32_t x = 0; x < fb_width; x++) {
+            fb[0 * (fb_pitch / 4) + x] = 0xFFFFFFFF; // Top
+            fb[(fb_height-1) * (fb_pitch / 4) + x] = 0xFFFFFFFF; // Bottom
+        }
+        for (uint32_t y = 0; y < fb_height; y++) {
+            fb[y * (fb_pitch / 4) + 0] = 0xFFFFFFFF; // Left
+            fb[y * (fb_pitch / 4) + (fb_width-1)] = 0xFFFFFFFF; // Right
+        }
+        
+        /* Draw some text-like pattern */
+        for (uint32_t y = 100; y < 200; y += 20) {
+            for (uint32_t x = 100; x < 400; x += 10) {
+                fb[y * (fb_pitch / 4) + x] = 0xFFFFFFFF;
+            }
+        }
+    } else {
+        /* Fallback: try to write to common framebuffer addresses */
+        uint32_t* fb_addresses[] = { (uint32_t*)0xFD000000, (uint32_t*)0xE0000000, NULL };
+        for (int i = 0; fb_addresses[i] != NULL; i++) {
+            uint32_t* fb = fb_addresses[i];
+            for (uint32_t j = 0; j < 1024 * 768; j++) {
+                fb[j] = 0xFFFF0000; // Red screen = no framebuffer
+            }
+        }
+    }
     
-    /* Draw status message */
-    vga_putstring(300, 50, "GegOS 64-bit Kernel", COLOR_WHITE, COLOR_BLUE);
-    vga_putstring(280, 100, "Long Mode Activated!", COLOR_YELLOW, COLOR_BLUE);
-    vga_putstring(300, 150, "64-bit x86-64 Architecture", COLOR_CYAN, COLOR_BLUE);
-    vga_putstring(200, 200, "Full 32-bit version: Use 32-bit option in GRUB menu", COLOR_WHITE, COLOR_BLUE);
-    
-    /* Halt - keep running the kernel */
+    /* Halt */
     asm("hlt");
-    
-    /* Infinite loop just in case HLT returns */
     while (1) {
         asm("hlt");
     }

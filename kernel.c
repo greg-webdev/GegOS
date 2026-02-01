@@ -14,6 +14,62 @@
 #include "network.h"
 #include "wifi.h"
 
+/* Multiboot 2 structures for framebuffer support */
+typedef struct {
+    uint32_t total_size;
+    uint32_t reserved;
+} multiboot2_info_header_t;
+
+typedef struct {
+    uint32_t type;
+    uint32_t size;
+} multiboot2_tag_header_t;
+
+typedef struct {
+    uint32_t type;        // 8
+    uint32_t size;
+    uint64_t framebuffer_addr;
+    uint32_t framebuffer_pitch;
+    uint32_t framebuffer_width;
+    uint32_t framebuffer_height;
+    uint8_t framebuffer_bpp;
+    uint8_t framebuffer_type;
+    uint16_t reserved;
+} multiboot2_framebuffer_tag_t;
+
+/* Global framebuffer information */
+static uint64_t fb_addr = 0;
+static uint32_t fb_pitch = 0;
+static uint32_t fb_width = 0;
+static uint32_t fb_height = 0;
+static uint8_t fb_bpp = 0;
+
+/* Parse Multiboot 2 information structure */
+static void parse_multiboot2_info(uint32_t* mb_info) {
+    multiboot2_info_header_t* header = (multiboot2_info_header_t*)mb_info;
+    uint32_t total_size = header->total_size;
+    
+    /* Start parsing tags after the header */
+    uint32_t offset = 8; // Skip header
+    while (offset < total_size) {
+        multiboot2_tag_header_t* tag = (multiboot2_tag_header_t*)((uint8_t*)mb_info + offset);
+        
+        if (tag->type == 8) { // Framebuffer tag
+            multiboot2_framebuffer_tag_t* fb_tag = (multiboot2_framebuffer_tag_t*)tag;
+            fb_addr = fb_tag->framebuffer_addr;
+            fb_pitch = fb_tag->framebuffer_pitch;
+            fb_width = fb_tag->framebuffer_width;
+            fb_height = fb_tag->framebuffer_height;
+            fb_bpp = fb_tag->framebuffer_bpp;
+        } else if (tag->type == 0) { // End tag
+            break;
+        }
+        
+        /* Move to next tag (aligned to 8 bytes) */
+        offset += (tag->size + 7) & ~7;
+    }
+}
+
 /* External app window getters */
 extern int get_browser_win(void);
 extern int get_wifi_win(void);
@@ -743,8 +799,17 @@ static void launch_game(int game_id) {
 
 /* Kernel main entry point */
 void kernel_main(uint32_t magic, uint32_t* multiboot_info) {
-    (void)magic;
-    (void)multiboot_info;
+    /* Check for Multiboot 2 magic */
+    if (magic == 0x36d76289) {
+        /* Parse Multiboot 2 information */
+        parse_multiboot2_info(multiboot_info);
+    }
+    
+    /* Debug: Check if framebuffer was detected */
+    if (fb_addr != 0) {
+        /* For now, just continue with VGA text mode */
+        /* TODO: Implement framebuffer rendering */
+    }
     
     /* Initialize subsystems */
     vga_init();
