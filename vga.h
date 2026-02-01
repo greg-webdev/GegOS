@@ -8,9 +8,9 @@
 
 #include <stdint.h>
 
-/* Screen dimensions */
-#define SCREEN_WIDTH  640
-#define SCREEN_HEIGHT 480
+/* Screen dimensions - 720p */
+#define SCREEN_WIDTH  1280
+#define SCREEN_HEIGHT 720
 
 /* VGA Color Palette (standard 256-color palette) */
 #define COLOR_BLACK       0

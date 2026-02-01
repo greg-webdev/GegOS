@@ -408,6 +408,15 @@ void vga_set_mode(int mode) {
             "int $0x10"
             : "+a" (bios_ax)
         );
+    } else if (mode == 2) {
+        /* Switch to 720p mode (1280x720) using VESA */
+        /* VESA mode 0x118 (1280x720x16) */
+        uint16_t bios_ax = 0x4F02;
+        uint16_t bios_bx = 0x0118;  /* VESA mode 118h */
+        asm volatile (
+            "int $0x10"
+            : "+a" (bios_ax), "+b" (bios_bx)
+        );
     } else {
         /* Switch back to 640x480 16-color mode (Mode 12h) */
         /* Call BIOS INT 10h, AH=0, AL=0x12 */

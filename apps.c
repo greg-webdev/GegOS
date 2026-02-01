@@ -74,7 +74,7 @@ static int num_apps = 7;
 
 /* Settings state */
 static int settings_win = -1;
-static int settings_resolution = 0;  /* 0=640x480, 1=320x200 */
+static int settings_resolution = 0;  /* 0=640x480, 1=320x200, 2=1280x720 */
 static int settings_mouse_speed = 1; /* 0=slow, 1=normal, 2=fast */
 static int settings_theme = 0;       /* 0=cyan, 1=gray, 2=blue */
 
@@ -762,8 +762,8 @@ void settings_draw_content(gui_window_t* win) {
     vga_putstring(x, y, "Resolution:", COLOR_BLACK, COLOR_WHITE);
     
     /* Resolution options */
-    const char* res_opts[] = {"640x480", "320x200"};
-    for (int i = 0; i < 2; i++) {
+    const char* res_opts[] = {"640x480", "320x200", "1280x720"};
+    for (int i = 0; i < 3; i++) {
         int bx = x + 75 + i * 50;
         uint8_t bg = (settings_resolution == i) ? COLOR_BLUE : COLOR_LIGHT_GRAY;
         uint8_t fg = (settings_resolution == i) ? COLOR_WHITE : COLOR_BLACK;
@@ -815,7 +815,7 @@ void settings_handle_click(gui_window_t* win, int mx, int my) {
     int y = win->y + 22;
     
     /* Check resolution buttons */
-    for (int i = 0; i < 2; i++) {
+    for (int i = 0; i < 3; i++) {
         int bx = x + 75 + i * 50;
         if (mx >= bx && mx < bx + 48 && my >= y - 2 && my < y + 10) {
             settings_resolution = i;

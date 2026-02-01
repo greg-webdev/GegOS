@@ -23,10 +23,10 @@ void kernel64_main(uint32_t* multiboot_info, uint32_t magic) {
     vga_fillrect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, COLOR_BLUE);
     
     /* Draw status message */
-    vga_putstring(100, 50, "GegOS 64-bit Kernel", COLOR_WHITE, COLOR_BLUE);
-    vga_putstring(80, 100, "Long Mode Activated!", COLOR_YELLOW, COLOR_BLUE);
-    vga_putstring(100, 150, "64-bit x86-64 Architecture", COLOR_CYAN, COLOR_BLUE);
-    vga_putstring(60, 200, "Full 32-bit version: Use 32-bit option in GRUB menu", COLOR_WHITE, COLOR_BLUE);
+    vga_putstring(300, 50, "GegOS 64-bit Kernel", COLOR_WHITE, COLOR_BLUE);
+    vga_putstring(280, 100, "Long Mode Activated!", COLOR_YELLOW, COLOR_BLUE);
+    vga_putstring(300, 150, "64-bit x86-64 Architecture", COLOR_CYAN, COLOR_BLUE);
+    vga_putstring(200, 200, "Full 32-bit version: Use 32-bit option in GRUB menu", COLOR_WHITE, COLOR_BLUE);
     
     /* Halt - keep running the kernel */
     asm("hlt");
@@ -35,4 +35,11 @@ void kernel64_main(uint32_t* multiboot_info, uint32_t magic) {
     while (1) {
         asm("hlt");
     }
+}
+
+/* Stub function for 64-bit build - not implemented */
+void redraw_cursor_area_kernel(int x, int y) {
+    (void)x;
+    (void)y;
+    /* Do nothing in 64-bit stub */
 }

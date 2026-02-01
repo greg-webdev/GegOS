@@ -461,13 +461,13 @@ static void redraw_start_menu_area(void) {
     gui_cursor_invalidate();
 }
 
-/* Redraw the area around a cursor position (cursor + 32 pixel buffer) */
+/* Redraw the area around a cursor position (30x30 pixel area) */
 void redraw_cursor_area_kernel(int x, int y) {
-    /* Calculate redraw rectangle: cursor size + 32 pixel buffer */
-    int left = x - 32;
-    int top = y - 32;
-    int width = 12 + 32 * 2;  /* CURSOR_WIDTH + buffer*2 */
-    int height = 16 + 32 * 2; /* CURSOR_HEIGHT + buffer*2 */
+    /* Calculate redraw rectangle: 30x30 area starting at cursor position */
+    int left = x;
+    int top = y;
+    int width = 30;
+    int height = 30;
     
     /* Clamp to screen bounds */
     if (left < 0) {
