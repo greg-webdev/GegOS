@@ -192,6 +192,22 @@ void gui_set_active_window(int window_id) {
     active_window = window_id;
 }
 
+/* Get active window */
+int gui_get_active_window(void) {
+    return active_window;
+}
+
+/* Close window (hide it) */
+void gui_close_window(int window_id) {
+    if (window_id >= 0 && window_id < num_windows) {
+        windows[window_id].visible = 0;
+        windows[window_id].active = 0;
+        if (active_window == window_id) {
+            active_window = -1;
+        }
+    }
+}
+
 /* Erase cursor by drawing desktop color over it */
 static void erase_cursor_area(int x, int y) {
     /* Just fill with desktop color - simple and fast */
@@ -296,6 +312,10 @@ void gui_draw_menubar(void) {
     vga_hline(clock_x, start_y + start_h - 1, 56, COLOR_WHITE);
     vga_vline(clock_x + 55, start_y, start_h, COLOR_WHITE);
     vga_putstring(clock_x + 8, start_y + 7, "12:00 PM", COLOR_BLACK, GUI_COLOR_TASKBAR);
+    
+    /* Network status (middle-right) */
+    int net_x = clock_x - 120;
+    vga_fillrect(net_x, start_y, 110, start_h, GUI_COLOR_TASKBAR);
 }
 
 /* Draw desktop */
@@ -343,39 +363,26 @@ void gui_draw_window(gui_window_t* win) {
         vga_putstring(x + 8, y + 7, win->title, GUI_COLOR_TITLE_TEXT, titlebar_color);
     }
     
-    /* Window control buttons */
-    int btn_size = 14;
+    /* Single big close button (X) */
+    int btn_width = 44;
+    int btn_height = 14;
     int btn_y = win->y + 5;
+    int close_x = win->x + win->width - btn_width - 6;
     
-    /* Close button (X) */
-    int close_x = win->x + win->width - btn_size - 6;
-    vga_fillrect(close_x, btn_y, btn_size, btn_size, COLOR_LIGHT_GRAY);
-    vga_hline(close_x, btn_y, btn_size, COLOR_WHITE);
-    vga_vline(close_x, btn_y, btn_size, COLOR_WHITE);
-    vga_hline(close_x, btn_y + btn_size - 1, btn_size, COLOR_BLACK);
-    vga_vline(close_x + btn_size - 1, btn_y, btn_size, COLOR_BLACK);
-    vga_line(close_x + 3, btn_y + 3, close_x + 10, btn_y + 10, COLOR_BLACK);
-    vga_line(close_x + 10, btn_y + 3, close_x + 3, btn_y + 10, COLOR_BLACK);
+    /* Red background for close button */
+    vga_fillrect(close_x, btn_y, btn_width, btn_height, COLOR_RED);
+    vga_hline(close_x, btn_y, btn_width, COLOR_LIGHT_RED);
+    vga_vline(close_x, btn_y, btn_height, COLOR_LIGHT_RED);
+    vga_hline(close_x, btn_y + btn_height - 1, btn_width, COLOR_BROWN);
+    vga_vline(close_x + btn_width - 1, btn_y, btn_height, COLOR_BROWN);
     
-    /* Maximize button */
-    int max_x = close_x - btn_size - 2;
-    vga_fillrect(max_x, btn_y, btn_size, btn_size, COLOR_LIGHT_GRAY);
-    vga_hline(max_x, btn_y, btn_size, COLOR_WHITE);
-    vga_vline(max_x, btn_y, btn_size, COLOR_WHITE);
-    vga_hline(max_x, btn_y + btn_size - 1, btn_size, COLOR_BLACK);
-    vga_vline(max_x + btn_size - 1, btn_y, btn_size, COLOR_BLACK);
-    vga_rect(max_x + 3, btn_y + 3, 7, 7, COLOR_BLACK);
-    vga_hline(max_x + 3, btn_y + 3, 7, COLOR_BLACK);
-    
-    /* Minimize button */
-    int min_x = max_x - btn_size - 2;
-    vga_fillrect(min_x, btn_y, btn_size, btn_size, COLOR_LIGHT_GRAY);
-    vga_hline(min_x, btn_y, btn_size, COLOR_WHITE);
-    vga_vline(min_x, btn_y, btn_size, COLOR_WHITE);
-    vga_hline(min_x, btn_y + btn_size - 1, btn_size, COLOR_BLACK);
-    vga_vline(min_x + btn_size - 1, btn_y, btn_size, COLOR_BLACK);
-    vga_hline(min_x + 3, btn_y + 10, 7, COLOR_BLACK);
-    vga_hline(min_x + 3, btn_y + 11, 7, COLOR_BLACK);
+    /* Draw X in center */
+    int cx = close_x + btn_width / 2;
+    int cy = btn_y + btn_height / 2;
+    vga_line(cx - 4, cy - 4, cx + 4, cy + 4, COLOR_WHITE);
+    vga_line(cx + 4, cy - 4, cx - 4, cy + 4, COLOR_WHITE);
+    vga_line(cx - 3, cy - 4, cx + 5, cy + 4, COLOR_WHITE);
+    vga_line(cx + 5, cy - 4, cx - 3, cy + 4, COLOR_WHITE);
 }
 
 /* Draw button */

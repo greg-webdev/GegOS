@@ -20,7 +20,7 @@ ASFLAGS = -f elf32
 LDFLAGS = -T linker.ld -nostdlib -m elf_i386
 
 ASM_SOURCES = boot.s
-C_SOURCES = kernel.c vga.c keyboard.c mouse.c gui.c apps.c terminal.c pong.c snake.c game_2048.c
+C_SOURCES = kernel.c vga.c keyboard.c mouse.c gui.c apps.c network.c wifi.c terminal.c pong.c snake.c game_2048.c
 
 ASM_OBJECTS = $(patsubst %.s,$(BUILD_DIR)/%.o,$(ASM_SOURCES))
 C_OBJECTS = $(patsubst %.c,$(BUILD_DIR)/%.o,$(C_SOURCES))

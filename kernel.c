@@ -11,9 +11,12 @@
 #include "mouse.h"
 #include "gui.h"
 #include "apps.h"
+#include "network.h"
+#include "wifi.h"
 
 /* External app window getters */
 extern int get_browser_win(void);
+extern int get_wifi_win(void);
 extern int get_files_win(void);
 extern int get_notepad_win(void);
 extern int get_terminal_win(void);
@@ -23,6 +26,7 @@ extern int get_settings_win(void);
 
 /* External app content drawers */
 extern void browser_draw_content(gui_window_t* win);
+extern void wifi_draw_content(gui_window_t* win);
 extern void files_draw_content(gui_window_t* win);
 extern void notepad_draw_content(gui_window_t* win);
 extern void terminal_draw_content(gui_window_t* win);
@@ -32,6 +36,8 @@ extern void settings_draw_content(gui_window_t* win);
 
 /* External app input handlers */
 extern void browser_handle_key(char key);
+extern void wifi_handle_key(char key);
+extern void wifi_handle_click(int x, int y);
 extern void files_handle_key(char key);
 extern void files_handle_click(gui_window_t* win, int mx, int my);
 extern void notepad_handle_key(char key);
@@ -63,6 +69,7 @@ typedef struct {
 } desktop_icon_t;
 
 /* Icon click handlers */
+static void click_wifi(void) { app_wifi(); needs_redraw = 1; }
 static void click_browser(void) { app_browser(); needs_redraw = 1; }
 static void click_files(void) { app_files(); needs_redraw = 1; }
 static void click_notepad(void) { app_notepad(); needs_redraw = 1; }
@@ -73,6 +80,7 @@ static void click_about(void) { app_about(); needs_redraw = 1; }
 
 static desktop_icon_t desktop_icons[] = {
     {20, 40, "Potato", click_browser},
+    {20, 80, "WiFi", click_wifi},
     {20, 100, "Files", click_files},
     {20, 160, "Notepad", click_notepad},
     {20, 220, "Terminal", click_terminal},
@@ -213,6 +221,9 @@ static void draw_app_contents(void) {
     win = gui_get_window(get_browser_win());
     if (win && win->visible) browser_draw_content(win);
     
+    win = gui_get_window(get_wifi_win());
+    if (win && win->visible) wifi_draw_content(win);
+    
     win = gui_get_window(get_files_win());
     if (win && win->visible) files_draw_content(win);
     
@@ -238,6 +249,15 @@ static void handle_app_keyboard(char key, int mx, int my) {
     
     /* Erase cursor before any drawing */
     gui_erase_cursor();
+    
+    win = gui_get_window(get_wifi_win());
+    if (win && win->visible && win->active) {
+        wifi_handle_key(key);
+        wifi_draw_content(win);
+        gui_cursor_invalidate();
+        gui_draw_cursor(mx, my);
+        return;
+    }
     
     win = gui_get_window(get_browser_win());
     if (win && win->visible && win->active) {
@@ -562,8 +582,11 @@ void kernel_main(uint32_t magic, uint32_t* multiboot_info) {
     (void)magic;
     (void)multiboot_info;
     
-    /* Initialize VGA graphics mode */
+    /* Initialize subsystems */
     vga_init();
+    keyboard_init();
+    mouse_init();
+    network_init();
     
     /* Show loading screen */
     vga_clear(COLOR_BLUE);
@@ -585,6 +608,9 @@ void kernel_main(uint32_t magic, uint32_t* multiboot_info) {
     }
     
     mouse_init();
+    
+    /* Initialize network subsystem */
+    network_init();
     
     /* Clear mouse buffer */
     for (int i = 0; i < 50; i++) {
@@ -685,7 +711,16 @@ void kernel_main(uint32_t magic, uint32_t* multiboot_info) {
         if (keyboard_haskey()) {
             char key = keyboard_getchar();
             if (key != 0) {
-                handle_app_keyboard(key, mx, my);
+                /* Alt+F4 closes active window */
+                if (key == (char)KEY_F4 && (keyboard_get_modifiers() & MOD_ALT)) {
+                    if (active_win_id >= 0) {
+                        gui_close_window(active_win_id);
+                        active_win_id = -1;
+                        needs_redraw = 1;
+                    }
+                } else {
+                    handle_app_keyboard(key, mx, my);
+                }
             }
         }
         

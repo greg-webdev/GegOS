@@ -8,6 +8,7 @@
 #include "keyboard.h"
 #include "mouse.h"
 #include "gui.h"
+#include "wifi.h"
 #include "io.h"
 #include "terminal.h"
 
@@ -59,6 +60,7 @@ static file_entry_t virtual_files[] = {
 /* Built-in applications */
 static app_t apps[] = {
     {"Browser", "[WWW]", app_browser, 0},
+    {"WiFi", "[NET]", app_wifi, 0},
     {"Files", "[DIR]", app_files, 0},
     {"Notepad", "[TXT]", app_notepad, 0},
     {"Terminal", "[CMD]", app_terminal, 0},

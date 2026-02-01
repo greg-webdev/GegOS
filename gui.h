@@ -103,6 +103,12 @@ void gui_show_window(int window_id, int visible);
 /* Set active window */
 void gui_set_active_window(int window_id);
 
+/* Get active window */
+int gui_get_active_window(void);
+
+/* Close window */
+void gui_close_window(int window_id);
+
 /* Draw menubar */
 void gui_draw_menubar(void);
 
