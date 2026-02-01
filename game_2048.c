@@ -270,13 +270,13 @@ void game_2048_run(void) {
         }
         
         /* Frame delay */
-        for (volatile int i = 0; i < 50000; i++);
+        for (volatile int i = 0; i < 150000; i++);
     }
     
     game_2048_draw();
     
     /* Wait for keypress */
     while (!keyboard_haskey()) {
-        for (volatile int i = 0; i < 50000; i++);
+        for (volatile int i = 0; i < 150000; i++);
     }
 }
