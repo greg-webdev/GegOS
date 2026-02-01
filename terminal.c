@@ -62,18 +62,74 @@ static void add_output(const char* line) {
     output_count++;
 }
 
+/* Simple in-memory filesystem */
+#define MAX_FS_ENTRIES 32
+#define MAX_FILENAME 32
+#define MAX_FILECONTENT 256
+
+typedef struct {
+    char name[MAX_FILENAME];
+    char content[MAX_FILECONTENT];
+    int is_dir;
+    int exists;
+} fs_entry_t;
+
+static fs_entry_t filesystem[MAX_FS_ENTRIES];
+static char current_dir[MAX_CMD_LEN] = "/home/user";
+static int fs_initialized = 0;
+
+/* External password access */
+extern char lock_password[32];
+
+static void init_filesystem(void) {
+    if (fs_initialized) return;
+    
+    /* Initialize with some default directories and files */
+    for (int i = 0; i < MAX_FS_ENTRIES; i++) {
+        filesystem[i].exists = 0;
+    }
+    
+    /* Default directories */
+    str_cpy(filesystem[0].name, "Desktop");
+    filesystem[0].is_dir = 1;
+    filesystem[0].exists = 1;
+    
+    str_cpy(filesystem[1].name, "Documents");
+    filesystem[1].is_dir = 1;
+    filesystem[1].exists = 1;
+    
+    str_cpy(filesystem[2].name, "Downloads");
+    filesystem[2].is_dir = 1;
+    filesystem[2].exists = 1;
+    
+    /* Default files */
+    str_cpy(filesystem[3].name, "readme.txt");
+    str_cpy(filesystem[3].content, "Welcome to GegOS!");
+    filesystem[3].is_dir = 0;
+    filesystem[3].exists = 1;
+    
+    str_cpy(filesystem[4].name, "hello.txt");
+    str_cpy(filesystem[4].content, "Hello, World!");
+    filesystem[4].is_dir = 0;
+    filesystem[4].exists = 1;
+    
+    fs_initialized = 1;
+}
+
 /* Command execution */
 static void exec_help(void) {
     add_output("Available commands:");
     add_output("  help       - Show this help");
     add_output("  clear      - Clear screen");
     add_output("  ls         - List files");
+    add_output("  cd DIR     - Change directory");
     add_output("  pwd        - Print working directory");
+    add_output("  mkdir DIR  - Create directory");
+    add_output("  touch FILE - Create empty file");
+    add_output("  nano FILE  - Edit file (simulated)");
+    add_output("  cat FILE   - Show file contents");
+    add_output("  passwd     - Change lock password");
     add_output("  uname      - System information");
-    add_output("  apt list   - List installed packages");
-    add_output("  apt update - Update package lists");
-    add_output("  dir        - Directory listing (Windows)");
-    add_output("  ver        - Version info (Windows)");
     add_output("  echo TEXT  - Print text");
 }
 
@@ -83,22 +139,161 @@ static void exec_clear(void) {
 }
 
 static void exec_ls(void) {
-    add_output("Desktop/");
-    add_output("Documents/");
-    add_output("Downloads/");
-    add_output("System/");
-    add_output("bin/");
-    add_output("etc/");
+    init_filesystem();
+    for (int i = 0; i < MAX_FS_ENTRIES; i++) {
+        if (filesystem[i].exists) {
+            char line[MAX_CMD_LEN];
+            str_cpy(line, filesystem[i].name);
+            if (filesystem[i].is_dir) {
+                int len = str_len(line);
+                line[len] = '/';
+                line[len+1] = 0;
+            }
+            add_output(line);
+        }
+    }
 }
 
 static void exec_pwd(void) {
-    add_output("/home/user");
+    add_output(current_dir);
+}
+
+static void exec_cd(const char* args) {
+    if (str_len(args) <= 3) {
+        str_cpy(current_dir, "/home/user");
+        add_output("Changed to /home/user");
+        return;
+    }
+    const char* dir = args + 3;
+    if (dir[0] == '.' && dir[1] == '.') {
+        str_cpy(current_dir, "/home");
+        add_output("Changed to /home");
+    } else if (dir[0] == '/') {
+        str_cpy(current_dir, dir);
+        add_output("Changed directory");
+    } else {
+        /* Append to current dir */
+        int len = str_len(current_dir);
+        current_dir[len] = '/';
+        str_cpy(current_dir + len + 1, dir);
+        add_output("Changed directory");
+    }
+}
+
+static void exec_mkdir(const char* args) {
+    init_filesystem();
+    if (str_len(args) <= 6) {
+        add_output("Usage: mkdir <dirname>");
+        return;
+    }
+    const char* dirname = args + 6;
+    /* Find free slot */
+    for (int i = 0; i < MAX_FS_ENTRIES; i++) {
+        if (!filesystem[i].exists) {
+            str_cpy(filesystem[i].name, dirname);
+            filesystem[i].is_dir = 1;
+            filesystem[i].exists = 1;
+            add_output("Directory created");
+            return;
+        }
+    }
+    add_output("Error: No space for new directory");
+}
+
+static void exec_touch(const char* args) {
+    init_filesystem();
+    if (str_len(args) <= 6) {
+        add_output("Usage: touch <filename>");
+        return;
+    }
+    const char* filename = args + 6;
+    /* Check if exists */
+    for (int i = 0; i < MAX_FS_ENTRIES; i++) {
+        if (filesystem[i].exists) {
+            int match = 1;
+            int j = 0;
+            while (filesystem[i].name[j] || filename[j]) {
+                if (filesystem[i].name[j] != filename[j]) {
+                    match = 0;
+                    break;
+                }
+                j++;
+            }
+            if (match) {
+                add_output("File already exists");
+                return;
+            }
+        }
+    }
+    /* Find free slot */
+    for (int i = 0; i < MAX_FS_ENTRIES; i++) {
+        if (!filesystem[i].exists) {
+            str_cpy(filesystem[i].name, filename);
+            filesystem[i].content[0] = 0;
+            filesystem[i].is_dir = 0;
+            filesystem[i].exists = 1;
+            add_output("File created");
+            return;
+        }
+    }
+    add_output("Error: No space for new file");
+}
+
+static void exec_cat(const char* args) {
+    init_filesystem();
+    if (str_len(args) <= 4) {
+        add_output("Usage: cat <filename>");
+        return;
+    }
+    const char* filename = args + 4;
+    for (int i = 0; i < MAX_FS_ENTRIES; i++) {
+        if (filesystem[i].exists && !filesystem[i].is_dir) {
+            int match = 1;
+            int j = 0;
+            while (filesystem[i].name[j] || filename[j]) {
+                if (filesystem[i].name[j] != filename[j]) {
+                    match = 0;
+                    break;
+                }
+                j++;
+            }
+            if (match) {
+                if (filesystem[i].content[0]) {
+                    add_output(filesystem[i].content);
+                } else {
+                    add_output("(empty file)");
+                }
+                return;
+            }
+        }
+    }
+    add_output("File not found");
+}
+
+static void exec_nano(const char* args) {
+    if (str_len(args) <= 5) {
+        add_output("Usage: nano <filename>");
+        return;
+    }
+    add_output("nano: Text editor not available");
+    add_output("Use touch to create files");
+}
+
+static void exec_passwd(const char* args) {
+    if (str_len(args) <= 7) {
+        add_output("Usage: passwd <newpassword>");
+        add_output("Current password is 'gegos'");
+        return;
+    }
+    const char* newpass = args + 7;
+    str_cpy(lock_password, newpass);
+    add_output("Password changed successfully");
 }
 
 static void exec_uname(void) {
     add_output("GegOS 1.0.0 x86 i686");
     add_output("Kernel: GegOS-32bit");
-    add_output("Built: Jan 2026");
+    add_output("Built: Feb 2026");
 }
 
 static void exec_apt_list(void) {
@@ -160,6 +355,18 @@ static void exec_command(const char* cmd) {
         exec_ls();
     } else if (str_cmp(cmd, "pwd") == 0) {
         exec_pwd();
+    } else if (str_startswith(cmd, "cd")) {
+        exec_cd(cmd);
+    } else if (str_startswith(cmd, "mkdir ")) {
+        exec_mkdir(cmd);
+    } else if (str_startswith(cmd, "touch ")) {
+        exec_touch(cmd);
+    } else if (str_startswith(cmd, "cat ")) {
+        exec_cat(cmd);
+    } else if (str_startswith(cmd, "nano ")) {
+        exec_nano(cmd);
+    } else if (str_startswith(cmd, "passwd")) {
+        exec_passwd(cmd);
     } else if (str_cmp(cmd, "uname") == 0) {
         exec_uname();
     } else if (str_cmp(cmd, "apt list") == 0) {
@@ -173,36 +380,7 @@ static void exec_command(const char* cmd) {
     } else if (str_startswith(cmd, "echo ")) {
         exec_echo(cmd);
     } else {
-        char error[MAX_CMD_LEN];
-        error[0] = '-';
-        error[1] = 'b';
-        error[2] = 'a';
-        error[3] = 's';
-        error[4] = 'h';
-        error[5] = ':';
-        error[6] = ' ';
-        int i = 0;
-        while (cmd[i] && i < 20) {
-            error[7 + i] = cmd[i];
-            i++;
-        }
-        error[7 + i] = ':';
-        error[8 + i] = ' ';
-        error[9 + i] = 'c';
-        error[10 + i] = 'm';
-        error[11 + i] = 'd';
-        error[12 + i] = ' ';
-        error[13 + i] = 'n';
-        error[14 + i] = 'o';
-        error[15 + i] = 't';
-        error[16 + i] = ' ';
-        error[17 + i] = 'f';
-        error[18 + i] = 'o';
-        error[19 + i] = 'u';
-        error[20 + i] = 'n';
-        error[21 + i] = 'd';
-        error[22 + i] = 0;
-        add_output(error);
+        add_output("-bash: command not found");
     }
 }
 

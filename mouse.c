@@ -100,7 +100,7 @@ void mouse_init(void) {
     /* Set sample rate to 100 */
     mouse_write(MOUSE_SET_SAMPLE);
     mouse_read();  /* ACK */
-    mouse_write(100);
+    mouse_write(10);
     mouse_read();  /* ACK */
     
     /* Enable mouse packet streaming */

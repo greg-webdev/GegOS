@@ -127,3 +127,6 @@ void redraw_cursor_area_kernel(int x, int y) {
     (void)y;
     /* Do nothing in 64-bit stub */
 }
+
+/* Global password for 64-bit build */
+char lock_password[32] = "gegos";

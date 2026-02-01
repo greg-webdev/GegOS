@@ -16,6 +16,7 @@
 #define MOD_CTRL      (1 << 1)
 #define MOD_ALT       (1 << 2)
 #define MOD_CAPSLOCK  (1 << 3)
+#define MOD_SUPER     (1 << 4)  /* Meta/Windows/Super key */
 
 /* Special key codes */
 #define KEY_ESCAPE    27
